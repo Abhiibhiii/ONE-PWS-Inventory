@@ -19,14 +19,20 @@ import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
+import { LoadingSpinner } from '../components/UI/LoadingSpinner';
+
 interface AssetsPageProps {
   onAssetClick?: (id: string) => void;
   initialAction?: 'import';
 }
 
 export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAction }) => {
-  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, getWarrantyStatus, settings } = useAssets();
+  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, getWarrantyStatus, settings, isLoading } = useAssets();
   const { user } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner message="Loading assets..." />;
+  }
   const isSuperAdmin = user?.role === 'Super Admin';
   const isAdmin = user?.role === 'Admin' || isSuperAdmin;
   const isViewer = user?.role === 'Viewer';

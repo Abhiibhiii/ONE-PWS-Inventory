@@ -11,9 +11,15 @@ import { generateGatePassDoc } from '../lib/gatePassGenerator';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { useAuth } from '../hooks/useAuth';
 
+import { LoadingSpinner } from '../components/UI/LoadingSpinner';
+
 export const GatePassPage: React.FC = () => {
-  const { gatePasses, settings, updateGatePass, deleteGatePass } = useAssets();
+  const { gatePasses, settings, updateGatePass, deleteGatePass, isLoading } = useAssets();
   const { user } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner message="Loading gate passes..." />;
+  }
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Returned'>('All');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);

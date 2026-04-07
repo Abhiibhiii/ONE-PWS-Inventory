@@ -9,9 +9,15 @@ import { Asset, AssetCategory } from '../types';
 import { cn } from '../utils/cn';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 
+import { LoadingSpinner } from '../components/UI/LoadingSpinner';
+
 export const EWastePage: React.FC = () => {
-  const { assets, updateAsset, deleteAsset, bulkDelete, bulkUpdateStatus } = useAssets();
+  const { assets, updateAsset, deleteAsset, bulkDelete, bulkUpdateStatus, isLoading } = useAssets();
   const { user } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner message="Loading recycle bin..." />;
+  }
   const isAdmin = user?.role === 'Admin';
 
   const [search, setSearch] = useState('');

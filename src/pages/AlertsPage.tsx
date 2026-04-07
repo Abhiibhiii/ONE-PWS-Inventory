@@ -10,14 +10,20 @@ import { format } from 'date-fns';
 import { Search, Filter, History, Bell, FileDown, ClipboardList } from 'lucide-react';
 import { cn } from '../utils/cn';
 
+import { LoadingSpinner } from '../components/UI/LoadingSpinner';
+
 interface AlertsPageProps {
   initialTab?: 'active' | 'history' | 'audit';
 }
 
 export const AlertsPage: React.FC<AlertsPageProps> = ({ initialTab = 'active' }) => {
-  const { resolvedAlerts } = useAlerts();
-  const { logs } = useAuditLogs();
+  const { resolvedAlerts, loading: alertsLoading } = useAlerts();
+  const { logs, loading: logsLoading } = useAuditLogs();
   const { user } = useAuth();
+
+  if (alertsLoading || logsLoading) {
+    return <LoadingSpinner message="Loading alerts and logs..." />;
+  }
   const [activeTab, setActiveTab] = useState<'active' | 'history' | 'audit'>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
 

@@ -8,12 +8,13 @@ import { AlertPanel } from '../components/Alerts/AlertPanel';
 import { Package, CheckCircle, AlertTriangle, Clock, ArrowRight, Activity, Trash2, Bell, Plus, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '../components/UI/Button';
+import { LoadingSpinner } from '../components/UI/LoadingSpinner';
 import { cn } from '../utils/cn';
 import { isAfter, subDays } from 'date-fns';
 
 export const DashboardPage: React.FC = () => {
-  const { stats, getFinancialYearStats, gatePasses } = useAssets();
-  const { resolvedAlerts } = useAlerts();
+  const { stats, getFinancialYearStats, gatePasses, isLoading } = useAssets();
+  const { resolvedAlerts, loading: alertsLoading } = useAlerts();
   const [activeTab, setActiveTab] = React.useState<'hardware' | 'software'>('hardware');
 
   const currentYear = new Date().getFullYear();
@@ -30,6 +31,10 @@ export const DashboardPage: React.FC = () => {
     }
     return years;
   }, [defaultFY]);
+
+  if (isLoading || alertsLoading) {
+    return <LoadingSpinner message="Loading dashboard data..." />;
+  }
 
   return (
     <div className="space-y-8">
