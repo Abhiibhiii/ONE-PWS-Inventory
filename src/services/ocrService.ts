@@ -1,6 +1,24 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (aiInstance) return aiInstance;
+  
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("GEMINI_API_KEY is not set. AI features will be disabled.");
+    return null;
+  }
+  
+  try {
+    aiInstance = new GoogleGenAI({ apiKey });
+    return aiInstance;
+  } catch (error) {
+    console.error("Failed to initialize GoogleGenAI:", error);
+    return null;
+  }
+};
 
 export interface InvoiceData {
   purchaseDate?: string;
@@ -13,7 +31,16 @@ export interface InvoiceData {
   invoiceNoOptions?: string[];
 }
 
+export const isAIEnabled = () => {
+  return !!process.env.GEMINI_API_KEY;
+};
+
 export const extractInvoiceData = async (base64Image: string, mimeType: string): Promise<InvoiceData> => {
+  const ai = getAI();
+  if (!ai) {
+    throw new Error("AI service is not configured. Please check your GEMINI_API_KEY.");
+  }
+
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [

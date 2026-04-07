@@ -36,8 +36,9 @@ import {
   ChevronUp,
   Plus
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ConfirmModal } from '../UI/ConfirmModal';
-import { extractInvoiceData, InvoiceData } from '../../services/ocrService';
+import { extractInvoiceData, InvoiceData, isAIEnabled } from '../../services/ocrService';
 import { OcrValidationModal } from './OcrValidationModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { ASSET_SCHEMA, COMMON_FIELDS } from '../../constants/assetSchema';
@@ -255,22 +256,34 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!isAIEnabled()) {
+      toast.error('AI service is not configured. Please add GEMINI_API_KEY to your environment variables.');
+      return;
+    }
+
     setIsOcrLoading(true);
     setOcrSuccess(false);
 
     try {
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const data = await extractInvoiceData(base64, file.type);
-        
-        setOcrData(data);
-        setIsOcrModalOpen(true);
+        try {
+          const base64 = (reader.result as string).split(',')[1];
+          const data = await extractInvoiceData(base64, file.type);
+          
+          setOcrData(data);
+          setIsOcrModalOpen(true);
+        } catch (error: any) {
+          console.error('OCR failed:', error);
+          toast.error(error.message || 'Failed to extract data from invoice. Please try again.');
+        } finally {
+          setIsOcrLoading(false);
+        }
       };
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('OCR failed:', error);
-    } finally {
+      toast.error('Failed to read file. Please try again.');
       setIsOcrLoading(false);
     }
   };
@@ -437,10 +450,20 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
             </div>
             <div>
               <p className="text-sm font-medium text-slate-900 dark:text-white">Auto-fill via Invoice</p>
-              <p className="text-xs text-slate-500">Upload PDF or Image to extract warranty data</p>
+              <p className="text-xs text-slate-500">
+                {isAIEnabled() 
+                  ? "Upload PDF or Image to extract warranty data" 
+                  : "AI features are currently disabled (missing API key)"}
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            {!isAIEnabled() && (
+              <div className="flex items-center text-xs text-amber-600 dark:text-amber-400 mr-2">
+                <AlertCircle className="mr-1 h-3 w-3" />
+                Config Required
+              </div>
+            )}
             {isOcrLoading && (
               <div className="flex items-center text-xs text-slate-500">
                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />

@@ -11,8 +11,8 @@ interface State {
   error: Error | null;
 }
 
-export class ErrorBoundary extends (Component as any) {
-  public state: any = {
+export class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
     hasError: false,
     error: null
   };
