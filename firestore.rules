@@ -1,0 +1,284 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: assets
+    // Document ID: auto-generated or custom
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - ipAddress: string (optional)
+    //   - systemName: string (optional)
+    //   - sysSlNo: string (required)
+    //   - model: string (required)
+    //   - processor: string (optional)
+    //   - ramMb: number (optional)
+    //   - hddGb: number (optional)
+    //   - monitor: string (optional)
+    //   - monitorSn: string (optional)
+    //   - keyboard: string (optional)
+    //   - mouse: string (optional)
+    //   - os: string (optional)
+    //   - licenseType: string (optional)
+    //   - productKey: string (optional)
+    //   - department: string (optional)
+    //   - location: string (optional)
+    //   - invoiceNo: string (optional)
+    //   - invoiceDate: string (optional)
+    //   - usbStatus: string (optional)
+    //   - remarks: string (optional)
+    //   - category: string (required)
+    //   - status: string (required, enum: Active, In Repair, Move to E-Waste, In IT Stock, Expired, Inactive)
+    //   - assignedTo: string (optional)
+    //   - value: number (optional, >= 0)
+    //   - maintenanceHistory: list (optional)
+    //   - uid: string (required, must match authenticated user UID)
+    //   - createdAt: timestamp (optional)
+    //   - updatedAt: timestamp (optional)
+
+    // Collection: settings
+    // Fields:
+    //   - hardwareWarranty: map (string -> number)
+    //   - softwareWarranty: map (string -> number)
+    //   - notificationsEnabled: bool
+    //   - uid: string
+    //
+    // Sub-collection: assets/{assetId}/maintenance
+    // Fields:
+    //   - assetId: string (required, must match parent document ID)
+    //   - date: string (required, ISO 8601 format)
+    //   - description: string (required, 1-500 chars)
+    //   - performedBy: string (required, 1-100 chars)
+    //   - cost: number (optional, >= 0)
+    //   - uid: string (required, must match authenticated user UID)
+    //   - createdAt: timestamp (optional)
+    //
+    // Sub-collection: assets/{assetId}/history
+    // Fields:
+    //   - assetId: string (required)
+    //   - actionType: string (required)
+    //   - description: string (required)
+    //   - oldValue: any (optional)
+    //   - newValue: any (optional)
+    //   - performedBy: string (required, userId)
+    //   - performedByName: string (required)
+    //   - timestamp: timestamp (required)
+    //   - uid: string (required, must match authenticated user UID)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "abhijeetsharmawork1@gmail.com" && request.auth.token.email_verified == true ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Super Admin');
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin');
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(field, min, max) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= min && 
+             request.resource.data[field].size() <= max;
+    }
+
+    function isValidOptionalString(field, min, max) {
+      return !(field in request.resource.data) || 
+             (request.resource.data[field] is string && 
+              request.resource.data[field].size() >= min && 
+              request.resource.data[field].size() <= max);
+    }
+
+    function isValidStatus(status) {
+      return status in ['Active', 'In Repair', 'Replaced', 'Move to E-Waste', 'E-Waste', 'Inactive', 'In IT Stock'];
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*$");
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['name', 'email', 'role']) &&
+             hasOnlyAllowedFields(['id', 'name', 'email', 'role', 'avatar', 'preferences', 'stats', 'createdAt', 'updatedAt', 'joinedAt', 'status']) &&
+             isValidString('name', 1, 100) &&
+             isValidEmail(data.email) &&
+             data.role in ['Super Admin', 'Admin', 'Viewer'];
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidAsset(data) {
+      return isAdmin() ? true : (
+             hasRequiredFields(['name', 'sysSlNo', 'status', 'uid', 'category', 'subcategory']) &&
+             (data.uid == request.auth.uid || isAdmin()) &&
+             hasOnlyAllowedFields(['id', 'name', 'ipAddress', 'dynamicIp', 'systemName', 'sysSlNo', 'model', 'processor', 'ramMb', 'hddGb', 'monitor', 'monitorSn', 'keyboard', 'mouse', 'os', 'licenseType', 'productKey', 'department', 'location', 'invoiceNo', 'invoiceDate', 'vendor', 'warrantyDurationMonths', 'usbStatus', 'remarks', 'category', 'subcategory', 'status', 'peripheralStatus', 'assignedTo', 'value', 'maintenanceHistory', 'additionalFields', 'uid', 'createdAt', 'updatedAt', 'macAddress', 'port', 'assignedEmail', 'licenseKey', 'expiryDate', 'assignedUser']) &&
+             isValidString('name', 1, 500) &&
+             isValidString('sysSlNo', 1, 500) &&
+             isValidStatus(data.status) &&
+             (!( 'value' in data) || data.value is number) &&
+             (!( 'ramMb' in data) || data.ramMb is number) &&
+             (!( 'hddGb' in data) || data.hddGb is number) &&
+             (!( 'warrantyDurationMonths' in data) || data.warrantyDurationMonths is number) &&
+             (!( 'maintenanceHistory' in data) || data.maintenanceHistory is list) &&
+             (!( 'peripheralStatus' in data) || data.peripheralStatus is map) &&
+             (!( 'assignedTo' in data) || data.assignedTo is map || data.assignedTo is string || data.assignedTo == null) &&
+             (!( 'additionalFields' in data) || data.additionalFields is map)
+      );
+    }
+
+    function isValidSettings(data) {
+      return isAdmin() &&
+             (!('uid' in data) || data.uid == 'system' || data.uid == request.auth.uid) &&
+             (!( 'hardwareWarranty' in data) || data.hardwareWarranty is map) &&
+             (!( 'softwareWarranty' in data) || data.softwareWarranty is map) &&
+             (!( 'notificationsEnabled' in data) || data.notificationsEnabled is bool) &&
+             (!( 'customSchemas' in data) || data.customSchemas is map);
+    }
+
+    function isValidMaintenanceRecord(data) {
+      return hasRequiredFields(['assetId', 'date', 'description', 'performedBy', 'uid']) &&
+             hasOnlyAllowedFields(['id', 'assetId', 'date', 'description', 'performedBy', 'cost', 'uid', 'createdAt']) &&
+             isValidString('assetId', 1, 100) &&
+             isValidDateString(data.date) &&
+             isValidString('description', 1, 500) &&
+             isValidString('performedBy', 1, 100) &&
+             (!( 'cost' in data) || data.cost is number) &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidAlert(data) {
+      return hasRequiredFields(['type', 'severity', 'message', 'status', 'uid']) &&
+             hasOnlyAllowedFields(['id', 'type', 'severity', 'message', 'suggestion', 'assetId', 'status', 'createdAt', 'resolvedAt', 'actionTaken', 'uid', 'updatedAt']) &&
+             data.type in ['Warranty', 'Unassigned', 'Maintenance'] &&
+             data.severity in ['Low', 'Medium', 'High'] &&
+             data.status in ['ACTIVE', 'RESOLVED'] &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidAuditLog(data) {
+      return hasRequiredFields(['alertId', 'actionType', 'description', 'performedBy', 'timestamp']) &&
+             data.actionType in ['CREATED', 'ACTION_TAKEN', 'RESOLVED', 'AUTO_RESOLVED', 'UPDATED'];
+    }
+
+    function isValidAssetHistory(data) {
+      return hasRequiredFields(['assetId', 'actionType', 'description', 'performedBy', 'performedByName', 'timestamp', 'uid']) &&
+             hasOnlyAllowedFields(['id', 'assetId', 'actionType', 'description', 'oldValue', 'newValue', 'performedBy', 'performedByName', 'timestamp', 'uid']) &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidGatePass(data) {
+      return hasRequiredFields(['gatePassNo', 'receiverName', 'status', 'assetId', 'uid']) &&
+             hasOnlyAllowedFields(['id', 'gatePassNo', 'createDate', 'plantName', 'transporter', 'receiverCode', 'reason', 'receiverName', 'receiverAddress', 'vehicleNo', 'gstNo', 'lrNo', 'requestedBy', 'deptName', 'remark', 'items', 'status', 'createdAt', 'createdBy', 'assetId', 'assetName', 'uid', 'actualReturnDate', 'vendor', 'dateOut', 'expectedReturn', 'contactPerson']) &&
+             isValidString('gatePassNo', 1, 100) &&
+             data.status in ['Pending', 'Returned'] &&
+             data.uid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /users/{userId} {
+      allow get: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isSuperAdmin() && isValidUser(request.resource.data)) || 
+                    (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /assets/{assetId} {
+      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if isAdmin() || (isAuthenticated() && isDocOwner() && isValidAsset(request.resource.data) && uidUnchanged());
+      allow update: if isAdmin() || (isAuthenticated() && isDocOwner() && isValidAsset(request.resource.data) && uidNotModified());
+      allow delete: if isAdmin() || (isAuthenticated() && isDocOwner());
+
+      match /maintenance/{recordId} {
+        allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+        allow create: if isAuthenticated() && (isAdmin() || isDocOwner()) && isValidMaintenanceRecord(request.resource.data) && uidUnchanged();
+        allow update: if isAuthenticated() && (isAdmin() || isDocOwner()) && isValidMaintenanceRecord(request.resource.data) && uidNotModified();
+        allow delete: if isAuthenticated() && (isAdmin() || isDocOwner());
+      }
+
+      match /history/{historyId} {
+        allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+        allow create: if isAuthenticated() && isValidAssetHistory(request.resource.data);
+      }
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin();
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isAuthenticated() && isValidAlert(request.resource.data) && uidUnchanged();
+      allow update: if isAuthenticated() && isDocOwner() && isValidAlert(request.resource.data) && uidNotModified();
+      allow delete: if isAdmin() && isDocOwner();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isAuthenticated();
+      allow update: if isDocOwner() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isDocOwner();
+    }
+
+    match /gatePasses/{gatePassId} {
+      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if isAdmin() && isValidGatePass(request.resource.data) && uidUnchanged();
+      allow update: if isAdmin() && isValidGatePass(request.resource.data) && uidNotModified();
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

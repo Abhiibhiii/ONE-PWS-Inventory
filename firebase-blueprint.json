@@ -1,0 +1,161 @@
+{
+  "entities": {
+    "Asset": {
+      "title": "Asset",
+      "description": "A hardware asset in the organization.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the asset." },
+        "name": { "type": "string", "description": "Name of the asset." },
+        "ipAddress": { "type": "string", "description": "IP Address of the asset." },
+        "dynamicIp": { "type": "string", "description": "Dynamic IP Address of the asset." },
+        "systemName": { "type": "string", "description": "System Name of the asset." },
+        "sysSlNo": { "type": "string", "description": "System Serial Number." },
+        "model": { "type": "string", "description": "Model of the asset." },
+        "processor": { "type": "string", "description": "Processor of the asset." },
+        "ramMb": { "type": "number", "description": "RAM in MB." },
+        "hddGb": { "type": "number", "description": "HDD in GB." },
+        "monitor": { "type": "string", "description": "Monitor model." },
+        "monitorSn": { "type": "string", "description": "Monitor Serial Number." },
+        "keyboard": { "type": "string", "description": "Keyboard model." },
+        "mouse": { "type": "string", "description": "Mouse model." },
+        "os": { "type": "string", "description": "Operating System." },
+        "licenseType": { "type": "string", "description": "License Type." },
+        "productKey": { "type": "string", "description": "Product Key." },
+        "department": { "type": "string", "description": "Department the asset belongs to." },
+        "location": { "type": "string", "description": "Physical location of the asset." },
+        "invoiceNo": { "type": "string", "description": "Invoice Number." },
+        "invoiceDate": { "type": "string", "format": "date", "description": "Invoice Date." },
+        "vendor": { "type": "string", "description": "Vendor name." },
+        "warrantyDurationMonths": { "type": "number", "description": "Warranty duration in months." },
+        "usbStatus": { "type": "string", "description": "USB Status." },
+        "remarks": { "type": "string", "description": "Remarks." },
+        "category": { "type": "string", "description": "Category of the asset (e.g., Laptop, Server)." },
+        "status": { "type": "string", "enum": ["Active", "In Repair", "Move to E-Waste", "In IT Stock", "Expired", "Inactive"], "description": "Current status of the asset." },
+        "peripheralStatus": { "type": "object", "description": "Status of peripherals." },
+        "assignedTo": { "type": "string", "description": "User the asset is assigned to." },
+        "value": { "type": "number", "description": "Monetary value of the asset." },
+        "maintenanceHistory": { "type": "array", "items": { "$ref": "MaintenanceRecord" }, "description": "History of maintenance for this asset." },
+        "uid": { "type": "string", "description": "UID of the user who owns this asset record." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the record was created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when the record was last updated." }
+      },
+      "required": ["name", "sysSlNo", "status", "uid"]
+    },
+    "GlobalSettings": {
+      "title": "Global Settings",
+      "description": "Global warranty settings for the organization.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hardwareWarranty": { "type": "object", "description": "Warranty durations for hardware subcategories." },
+        "softwareWarranty": { "type": "object", "description": "Warranty durations for software subcategories." },
+        "notificationsEnabled": { "type": "boolean" },
+        "uid": { "type": "string" }
+      },
+      "required": ["uid"]
+    },
+    "MaintenanceRecord": {
+      "title": "Maintenance Record",
+      "description": "A record of maintenance performed on an asset.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the record." },
+        "assetId": { "type": "string", "description": "ID of the asset this record belongs to." },
+        "date": { "type": "string", "format": "date", "description": "Date of maintenance." },
+        "description": { "type": "string", "description": "Description of the maintenance performed." },
+        "performedBy": { "type": "string", "description": "Person who performed the maintenance." },
+        "cost": { "type": "number", "description": "Cost of the maintenance performed." },
+        "uid": { "type": "string", "description": "UID of the user who owns this record." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the record was created." }
+      },
+      "required": ["assetId", "date", "description", "uid"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "An AI-generated alert for asset management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["Warranty", "Unassigned", "Maintenance"] },
+        "severity": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "message": { "type": "string" },
+        "suggestion": { "type": "string" },
+        "assetId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "RESOLVED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "actionTaken": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["type", "severity", "message", "status", "uid"]
+    },
+    "AssetHistory": {
+      "title": "Asset History",
+      "description": "A log of activity related to an asset.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "assetId": { "type": "string" },
+        "actionType": { "type": "string" },
+        "description": { "type": "string" },
+        "oldValue": { "type": "any" },
+        "newValue": { "type": "any" },
+        "performedBy": { "type": "string" },
+        "performedByName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["assetId", "actionType", "description", "performedBy", "performedByName", "timestamp"]
+    },
+    "GatePass": {
+      "title": "Gate Pass",
+      "description": "A document for tracking assets leaving the premises.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "gatePassNo": { "type": "string" },
+        "createDate": { "type": "string", "format": "date" },
+        "plantName": { "type": "string" },
+        "transporter": { "type": "string" },
+        "receiverCode": { "type": "string" },
+        "reason": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "receiverAddress": { "type": "string" },
+        "vehicleNo": { "type": "string" },
+        "gstNo": { "type": "string" },
+        "lrNo": { "type": "string" },
+        "requestedBy": { "type": "string" },
+        "deptName": { "type": "string" },
+        "remark": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Returned"] },
+        "assetId": { "type": "string" },
+        "assetName": { "type": "string" },
+        "uid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["gatePassNo", "receiverName", "status", "assetId", "uid"]
+    }
+  },
+  "firestore": {
+    "/assets/{assetId}": {
+      "schema": "Asset",
+      "description": "Collection of hardware assets."
+    },
+    "/gatePasses/{gatePassId}": {
+      "schema": "GatePass",
+      "description": "Collection of gate passes."
+    },
+    "/assets/{assetId}/maintenance/{recordId}": {
+      "schema": "MaintenanceRecord",
+      "description": "Sub-collection of maintenance records for a specific asset."
+    },
+    "/assets/{assetId}/history/{historyId}": {
+      "schema": "AssetHistory",
+      "description": "Sub-collection of history logs for a specific asset."
+    },
+    "/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "Collection of AI-powered alerts."
+    }
+  }
+}
