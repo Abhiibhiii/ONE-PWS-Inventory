@@ -227,20 +227,20 @@ service cloud.firestore {
     }
 
     match /assets/{assetId} {
-      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow read: if isAuthenticated();
       allow create: if isAdmin() || (isAuthenticated() && isDocOwner() && isValidAsset(request.resource.data) && uidUnchanged());
       allow update: if isAdmin() || (isAuthenticated() && isDocOwner() && isValidAsset(request.resource.data) && uidNotModified());
       allow delete: if isAdmin() || (isAuthenticated() && isDocOwner());
 
       match /maintenance/{recordId} {
-        allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+        allow read: if isAuthenticated();
         allow create: if isAuthenticated() && (isAdmin() || isDocOwner()) && isValidMaintenanceRecord(request.resource.data) && uidUnchanged();
         allow update: if isAuthenticated() && (isAdmin() || isDocOwner()) && isValidMaintenanceRecord(request.resource.data) && uidNotModified();
         allow delete: if isAuthenticated() && (isAdmin() || isDocOwner());
       }
 
       match /history/{historyId} {
-        allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+        allow read: if isAuthenticated();
         allow create: if isAuthenticated() && isValidAssetHistory(request.resource.data);
       }
     }
@@ -251,10 +251,15 @@ service cloud.firestore {
     }
 
     match /alerts/{alertId} {
-      allow read: if isOwner(resource.data.uid);
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidAlert(request.resource.data) && uidUnchanged();
       allow update: if isAuthenticated() && isDocOwner() && isValidAlert(request.resource.data) && uidNotModified();
       allow delete: if isAdmin() && isDocOwner();
+    }
+
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
     }
 
     match /audit_logs/{logId} {
@@ -270,7 +275,7 @@ service cloud.firestore {
     }
 
     match /gatePasses/{gatePassId} {
-      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow read: if isAuthenticated();
       allow create: if isAdmin() && isValidGatePass(request.resource.data) && uidUnchanged();
       allow update: if isAdmin() && isValidGatePass(request.resource.data) && uidNotModified();
       allow delete: if isAdmin();

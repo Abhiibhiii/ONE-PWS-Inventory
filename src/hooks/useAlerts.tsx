@@ -47,13 +47,11 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const qActive = query(
       collection(db, 'alerts'),
-      where('uid', '==', user.id),
       where('status', '==', 'ACTIVE')
     );
 
     const qResolved = query(
       collection(db, 'alerts'),
-      where('uid', '==', user.id),
       where('status', '==', 'RESOLVED')
     );
 
@@ -81,7 +79,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Auto-generation and auto-resolution logic
   useEffect(() => {
-    if (!user || !assets.length || !settings) return;
+    if (!user || (user.role !== 'Admin' && user.role !== 'Super Admin') || !assets.length || !settings) return;
 
     const syncAlerts = async () => {
       const batch = writeBatch(db);

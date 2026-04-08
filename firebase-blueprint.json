@@ -2,7 +2,7 @@
   "entities": {
     "Asset": {
       "title": "Asset",
-      "description": "A hardware asset in the organization.",
+      "description": "A hardware or software asset shared across the organization.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier for the asset." },
@@ -30,13 +30,13 @@
         "warrantyDurationMonths": { "type": "number", "description": "Warranty duration in months." },
         "usbStatus": { "type": "string", "description": "USB Status." },
         "remarks": { "type": "string", "description": "Remarks." },
-        "category": { "type": "string", "description": "Category of the asset (e.g., Laptop, Server)." },
+        "category": { "type": "string", "description": "Category of the asset (e.g., Hardware, Software)." },
         "status": { "type": "string", "enum": ["Active", "In Repair", "Move to E-Waste", "In IT Stock", "Expired", "Inactive"], "description": "Current status of the asset." },
         "peripheralStatus": { "type": "object", "description": "Status of peripherals." },
-        "assignedTo": { "type": "string", "description": "User the asset is assigned to." },
+        "assignedTo": { "type": "object", "description": "User the asset is assigned to (userId, name, email)." },
         "value": { "type": "number", "description": "Monetary value of the asset." },
         "maintenanceHistory": { "type": "array", "items": { "$ref": "MaintenanceRecord" }, "description": "History of maintenance for this asset." },
-        "uid": { "type": "string", "description": "UID of the user who owns this asset record." },
+        "uid": { "type": "string", "description": "UID of the user who created this asset record." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the record was created." },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when the record was last updated." }
       },
@@ -73,7 +73,7 @@
     },
     "Alert": {
       "title": "Alert",
-      "description": "An AI-generated alert for asset management.",
+      "description": "An AI-generated alert for asset management, visible to all authorized users.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -109,7 +109,7 @@
     },
     "GatePass": {
       "title": "Gate Pass",
-      "description": "A document for tracking assets leaving the premises.",
+      "description": "A document for tracking assets leaving the premises, shared across the organization.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },

@@ -15,7 +15,9 @@ import {
   writeBatch,
   serverTimestamp,
   getDocs,
-  setDoc
+  setDoc,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { useAuth } from './useAuth';
 
@@ -142,7 +144,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const assetsPath = 'assets';
-    const assetsQuery = query(collection(db, assetsPath), where('uid', '==', user.id));
+    const assetsQuery = query(collection(db, assetsPath));
     
     const unsubscribeAssets = onSnapshot(assetsQuery, (snapshot) => {
       const assetList: Asset[] = [];
@@ -237,7 +239,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Settings snapshot error:', error);
     });
 
-    const gatePassesQuery = query(collection(db, 'gatePasses'), where('uid', '==', user.id));
+    const gatePassesQuery = query(collection(db, 'gatePasses'));
     const unsubscribeGatePasses = onSnapshot(gatePassesQuery, (snapshot) => {
       const gpList: GatePass[] = [];
       snapshot.forEach((doc) => {
@@ -251,10 +253,20 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }));
     });
 
+    const activitiesQuery = query(collection(db, 'activities'), orderBy('timestamp', 'desc'), limit(50));
+    const unsubscribeActivities = onSnapshot(activitiesQuery, (snapshot) => {
+      const activityList: Activity[] = [];
+      snapshot.forEach((doc) => {
+        activityList.push({ id: doc.id, ...doc.data() } as Activity);
+      });
+      setActivities(activityList);
+    });
+
     return () => {
       unsubscribeAssets();
       unsubscribeSettings();
       unsubscribeGatePasses();
+      unsubscribeActivities();
     };
   }, [user, isAuthReady]);
 
@@ -318,7 +330,6 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (currentAsset?.category === 'Hardware') {
         const q = query(
           collection(db, 'assets'), 
-          where('uid', '==', user.id),
           where('subcategory', '==', 'Master Sheet'),
           where('additionalFields.originalAssetId', '==', id)
         );
@@ -584,7 +595,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // 2. Update all existing assets in that subcategory
       // Fetch all assets to handle legacy category normalization
-      const q = query(collection(db, 'assets'), where('uid', '==', user.id));
+      const q = query(collection(db, 'assets'));
       const snapshot = await getDocs(q);
       
       const matchingDocs = snapshot.docs.filter(doc => {
@@ -848,7 +859,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!user) return [];
     const path = `assets/${assetId}/history`;
     try {
-      const q = query(collection(db, 'assets', assetId, 'history'), where('uid', '==', user.id));
+      const q = query(collection(db, 'assets', assetId, 'history'));
       const snapshot = await getDocs(q);
       const history: AssetHistory[] = [];
       snapshot.forEach((doc) => {
@@ -895,7 +906,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!user) return [];
     const path = `assets/${assetId}/maintenance`;
     try {
-      const q = query(collection(db, 'assets', assetId, 'maintenance'), where('uid', '==', user.id));
+      const q = query(collection(db, 'assets', assetId, 'maintenance'));
       const snapshot = await getDocs(q);
       const records: MaintenanceRecord[] = [];
       snapshot.forEach((doc) => {
@@ -924,15 +935,19 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const addActivity = (type: Activity['type'], message: string) => {
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      type,
-      message,
-      timestamp: new Date().toISOString(),
-      user: user?.name || 'System',
-    };
-    setActivities(prev => [newActivity, ...prev]);
+  const addActivity = async (type: Activity['type'], message: string) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'activities'), {
+        type,
+        message,
+        timestamp: new Date().toISOString(),
+        user: user.name,
+        uid: user.id
+      });
+    } catch (error) {
+      console.error('Error adding activity:', error);
+    }
   };
 
   const getFinancialYearStats = useCallback((year: number) => {
