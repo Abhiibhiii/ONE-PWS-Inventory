@@ -427,7 +427,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialSection }) =>
         )}
 
         {isSuperAdmin && (
-          <Card ref={userRef}>
+          <Card ref={userRef} className="overflow-visible">
             <div className="flex items-center space-x-2 mb-6">
               <Users className="h-5 w-5 text-indigo-600" />
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">User Access Management</h3>

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { safeFormat } from '../../utils/dateUtils';
+import { cn } from '../../utils/cn';
 import { toast } from 'sonner';
 
 export const UserManagement: React.FC = () => {
@@ -31,6 +32,8 @@ export const UserManagement: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newRole, setNewRole] = useState<UserRole | null>(null);
   const [newStatus, setNewStatus] = useState<'Active' | 'Inactive' | 'Pending' | null>(null);
+
+  const [openDropdown, setOpenDropdown] = useState<{ userId: string, type: 'role' | 'status' } | null>(null);
 
   const isSuperAdmin = currentUser?.role === 'Super Admin';
 
@@ -85,7 +88,7 @@ export const UserManagement: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">User Access Management</h2>
@@ -99,7 +102,7 @@ export const UserManagement: React.FC = () => {
 
       <div className="grid gap-4">
         {users.map((u) => (
-          <Card key={u.id} className="overflow-hidden">
+          <Card key={u.id} className="relative overflow-visible">
             <div className="flex flex-col p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center space-x-4">
                 <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
@@ -144,46 +147,96 @@ export const UserManagement: React.FC = () => {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <div className="relative group">
-                    <Button variant="outline" size="sm" className="h-8">
-                      Role <ChevronDown className="ml-1 h-3 w-3" />
+                  <div className="relative">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8"
+                      onClick={() => setOpenDropdown(openDropdown?.userId === u.id && openDropdown?.type === 'role' ? null : { userId: u.id, type: 'role' })}
+                    >
+                      Role <ChevronDown className={cn("ml-1 h-3 w-3 transition-transform", openDropdown?.userId === u.id && openDropdown?.type === 'role' && "rotate-180")} />
                     </Button>
-                    <div className="absolute right-0 top-full z-10 mt-1 hidden w-32 rounded-md border border-slate-200 bg-white p-1 shadow-lg group-hover:block dark:border-slate-800 dark:bg-slate-900">
-                      {(['Super Admin', 'Admin', 'Viewer'] as UserRole[]).map((role) => (
-                        <button
-                          key={role}
-                          onClick={() => {
-                            setSelectedUser(u);
-                            setNewRole(role);
-                            setIsRoleModalOpen(true);
-                          }}
-                          className={`w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800 ${u.role === role ? 'bg-slate-50 font-bold text-indigo-600 dark:bg-slate-800' : 'text-slate-700 dark:text-slate-300'}`}
-                        >
-                          {role}
-                        </button>
-                      ))}
-                    </div>
+                    {openDropdown?.userId === u.id && openDropdown?.type === 'role' && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-20" 
+                          onClick={() => setOpenDropdown(null)}
+                        />
+                        <div className="absolute right-0 top-full z-40 mt-1 w-48 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100 dark:border-slate-800 dark:bg-slate-900">
+                          <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 px-2 py-1.5 mb-1 border-b border-slate-100 dark:border-slate-800">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Role</p>
+                          </div>
+                          {(['Super Admin', 'Admin', 'Viewer'] as UserRole[]).map((role) => (
+                            <button
+                              key={role}
+                              onClick={() => {
+                                setSelectedUser(u);
+                                setNewRole(role);
+                                setIsRoleModalOpen(true);
+                                setOpenDropdown(null);
+                              }}
+                              className={cn(
+                                "w-full rounded-lg px-3 py-2 text-left text-xs transition-colors",
+                                u.role === role 
+                                  ? "bg-indigo-50 font-bold text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400" 
+                                  : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                              )}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{role}</span>
+                                {u.role === role && <Shield className="h-3 w-3" />}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  <div className="relative group">
-                    <Button variant="outline" size="sm" className="h-8">
-                      Status <ChevronDown className="ml-1 h-3 w-3" />
+                  <div className="relative">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8"
+                      onClick={() => setOpenDropdown(openDropdown?.userId === u.id && openDropdown?.type === 'status' ? null : { userId: u.id, type: 'status' })}
+                    >
+                      Status <ChevronDown className={cn("ml-1 h-3 w-3 transition-transform", openDropdown?.userId === u.id && openDropdown?.type === 'status' && "rotate-180")} />
                     </Button>
-                    <div className="absolute right-0 top-full z-10 mt-1 hidden w-32 rounded-md border border-slate-200 bg-white p-1 shadow-lg group-hover:block dark:border-slate-800 dark:bg-slate-900">
-                      {(['Active', 'Inactive', 'Pending'] as const).map((status) => (
-                        <button
-                          key={status}
-                          onClick={() => {
-                            setSelectedUser(u);
-                            setNewStatus(status);
-                            setIsStatusModalOpen(true);
-                          }}
-                          className={`w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800 ${u.status === status ? 'bg-slate-50 font-bold text-indigo-600 dark:bg-slate-800' : 'text-slate-700 dark:text-slate-300'}`}
-                        >
-                          {status}
-                        </button>
-                      ))}
-                    </div>
+                    {openDropdown?.userId === u.id && openDropdown?.type === 'status' && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-20" 
+                          onClick={() => setOpenDropdown(null)}
+                        />
+                        <div className="absolute right-0 top-full z-40 mt-1 w-48 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100 dark:border-slate-800 dark:bg-slate-900">
+                          <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 px-2 py-1.5 mb-1 border-b border-slate-100 dark:border-slate-800">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Status</p>
+                          </div>
+                          {(['Active', 'Inactive', 'Pending'] as const).map((status) => (
+                            <button
+                              key={status}
+                              onClick={() => {
+                                setSelectedUser(u);
+                                setNewStatus(status);
+                                setIsStatusModalOpen(true);
+                                setOpenDropdown(null);
+                              }}
+                              className={cn(
+                                "w-full rounded-lg px-3 py-2 text-left text-xs transition-colors",
+                                u.status === status 
+                                  ? "bg-indigo-50 font-bold text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400" 
+                                  : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                              )}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{status}</span>
+                                {u.status === status && <UserCheck className="h-3 w-3" />}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {u.id !== currentUser?.id && (
