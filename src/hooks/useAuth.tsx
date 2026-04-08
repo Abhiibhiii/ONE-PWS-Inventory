@@ -125,6 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('The login popup was closed before completion. Please try again and ensure you complete the sign-in process.');
       } else if (error.code === 'auth/popup-blocked') {
         throw new Error('The login popup was blocked by your browser. Please allow popups for this site to sign in.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        throw new Error(`This domain (${window.location.hostname}) is not authorized for Firebase Authentication. Please add it to the "Authorized domains" list in the Firebase Console (Authentication > Settings).`);
       } else {
         console.error('Login error:', error);
         throw error;

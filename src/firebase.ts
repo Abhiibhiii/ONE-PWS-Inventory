@@ -8,6 +8,8 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Production logging for Firebase initialization
 if (process.env.NODE_ENV === 'production') {
   console.log('🔥 Firebase: Initializing...');
+  console.log('🌐 Auth Domain:', firebaseConfig.authDomain);
+  console.log('📍 Current Hostname:', window.location.hostname);
   if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'TODO_KEYHERE') {
     console.warn('⚠️ Firebase: API Key is missing or invalid in firebase-applet-config.json');
   }
