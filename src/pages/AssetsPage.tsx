@@ -29,7 +29,7 @@ interface AssetsPageProps {
 }
 
 export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAction }) => {
-  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, updateColumnWidths, updateColumnOrder, getWarrantyStatus, settings, isLoading } = useAssets();
+  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, updateColumnWidths, updateColumnOrder, getWarrantyStatus, getEffectiveSchema, settings, isLoading } = useAssets();
   const { user } = useAuth();
 
   if (isLoading) {
@@ -389,22 +389,41 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
     return ['All', ...Array.from(vSet).sort((a, b) => a.localeCompare(b))];
   }, [assets, categoryFilter, subcategoryFilter]);
 
-  const handleRemoveField = async (fieldKey: string) => {
-    if (categoryFilter === 'All' || subcategoryFilter === 'All') return;
-    const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
-    const currentSchema = settings?.customSchemas?.[schemaKey] || [];
-    const updatedSchema = currentSchema.filter(f => f.key !== fieldKey);
+  const effectiveSchema = useMemo(() => 
+    getEffectiveSchema(categoryFilter, subcategoryFilter),
+    [getEffectiveSchema, categoryFilter, subcategoryFilter]
+  );
+
+  const [isColumnDeleteConfirmOpen, setIsColumnDeleteConfirmOpen] = useState(false);
+  const [columnToDelete, setColumnToDelete] = useState<string | null>(null);
+
+  const handleRemoveField = (fieldKey: string) => {
+    setColumnToDelete(fieldKey);
+    setIsColumnDeleteConfirmOpen(true);
+  };
+
+  const confirmColumnDelete = async () => {
+    if (!columnToDelete || categoryFilter === 'All' || subcategoryFilter === 'All') return;
+    const updatedSchema = effectiveSchema.filter(f => f.key !== columnToDelete);
     await updateSchema(categoryFilter, subcategoryFilter, updatedSchema);
+    setIsColumnDeleteConfirmOpen(false);
+    setColumnToDelete(null);
     toast.success('Column removed successfully');
+  };
+
+  const handleRenameField = async (fieldKey: string, newLabel: string) => {
+    if (categoryFilter === 'All' || subcategoryFilter === 'All') return;
+    const updatedSchema = effectiveSchema.map(f => 
+      f.key === fieldKey ? { ...f, label: newLabel } : f
+    );
+    await updateSchema(categoryFilter, subcategoryFilter, updatedSchema);
   };
 
   const handleAddField = async () => {
     if (!newFieldName.trim() || categoryFilter === 'All' || subcategoryFilter === 'All') return;
-    const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
-    const currentSchema = settings?.customSchemas?.[schemaKey] || [];
     const fieldKey = newFieldName.toLowerCase().replace(/\s+/g, '_');
     
-    if (currentSchema.find(f => f.key === fieldKey)) {
+    if (effectiveSchema.find(f => f.key === fieldKey)) {
       toast.error('Column already exists');
       return;
     }
@@ -417,7 +436,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
       isManual: true
     };
 
-    await updateSchema(categoryFilter, subcategoryFilter, [...currentSchema, newField]);
+    await updateSchema(categoryFilter, subcategoryFilter, [...effectiveSchema, newField]);
     setNewFieldName('');
     toast.success('Column added successfully');
   };
@@ -449,36 +468,14 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
 
     if (isSubcategoryView) {
       const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
-      const staticSchema = ASSET_SCHEMA[subcategoryFilter as AssetSubcategory] || [];
-      const customSchema = settings?.customSchemas?.[schemaKey] || [];
+      const isCustomized = !!settings?.customSchemas?.[schemaKey];
       
-      const potentialFields = [
-        { key: 'name', label: 'NAME' },
-        { key: 'sysSlNo', label: 'SERIAL NO.' },
-        { key: 'model', label: 'MODEL' },
-        { key: 'ipAddress', label: 'IP ADDRESS' },
-        ...staticSchema.filter(f => !['name', 'sysSlNo', 'model', 'ipAddress'].includes(f.key)),
-        ...customSchema,
-        ...COMMON_FIELDS.filter(f => f.key !== 'warrantyDurationMonths')
-      ];
-
-      const activeFields = potentialFields.filter(f => {
-        if (customSchema.find(cf => cf.key === f.key)) return true;
-        if (!isColumnEmpty(f.key)) return true;
-        return false;
-      });
-
-      const dynamicCols: { key: string; label: string }[] = [];
-      const seenDynamicKeys = new Set<string>();
-      
-      activeFields.forEach(f => {
-        if (seenDynamicKeys.has(f.key)) return;
-        dynamicCols.push({ 
+      const dynamicCols = effectiveSchema
+        .filter(f => isCustomized || !isColumnEmpty(f.key))
+        .map(f => ({ 
           key: f.key, 
           label: f.label.toUpperCase()
-        });
-        seenDynamicKeys.add(f.key);
-      });
+        }));
       
       cols = [...selectionCol, ...snoCol, ...dynamicCols, ...statusCol, ...warrantyCol, ...actionsCol];
     } else {
@@ -823,36 +820,42 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                     {warrantyFilters.map(w => <option key={w} value={w}>{w}</option>)}
                   </select>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-slate-500">Dept:</span>
-                  <select
-                    value={departmentFilter}
-                    onChange={e => setDepartmentFilter(e.target.value)}
-                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                  >
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-slate-500">Location:</span>
-                  <select
-                    value={locationFilter}
-                    onChange={e => setLocationFilter(e.target.value)}
-                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                  >
-                    {locations.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-slate-500">Vendor:</span>
-                  <select
-                    value={vendorFilter}
-                    onChange={e => setVendorFilter(e.target.value)}
-                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-                  >
-                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
-                </div>
+                {effectiveSchema.find(f => f.key === 'department') && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-slate-500">Dept:</span>
+                    <select
+                      value={departmentFilter}
+                      onChange={e => setDepartmentFilter(e.target.value)}
+                      className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    >
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                )}
+                {effectiveSchema.find(f => f.key === 'location') && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-slate-500">Location:</span>
+                    <select
+                      value={locationFilter}
+                      onChange={e => setLocationFilter(e.target.value)}
+                      className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    >
+                      {locations.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                )}
+                {effectiveSchema.find(f => f.key === 'vendor') && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-slate-500">Vendor:</span>
+                    <select
+                      value={vendorFilter}
+                      onChange={e => setVendorFilter(e.target.value)}
+                      className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    >
+                      {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-medium text-slate-500">Color:</span>
                   <select
@@ -1297,17 +1300,21 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                 const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
                 const customSchema = settings?.customSchemas?.[schemaKey] || [];
                 
-                // Get all columns that are currently visible
-                const currentCols = getColumns().filter(c => !['selection', 'sno', 'actions', 'warranty', 'status'].includes(c.key));
+                // Get all columns from effective schema
+                const currentCols = effectiveSchema;
                 
                 return currentCols.map(col => {
-                  const isCustom = customSchema.find(f => f.key === col.key);
                   const savedWidth = settings?.columnWidths?.[schemaKey]?.[col.key];
 
                   return (
                     <div key={col.key} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{col.label}</p>
+                      <div className="flex-1 mr-4">
+                        <input 
+                          type="text"
+                          value={col.label}
+                          onChange={(e) => handleRenameField(col.key, e.target.value)}
+                          className="text-sm font-semibold text-slate-900 dark:text-white bg-transparent border-none focus:ring-0 p-0 w-full"
+                        />
                         <p className="text-[10px] text-slate-500 font-mono">{col.key}</p>
                       </div>
                       
@@ -1326,15 +1333,13 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                             className="w-16 h-7 rounded border border-slate-200 bg-white px-1.5 text-[10px] focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                           />
                         </div>
-                        {isCustom && (
-                          <button 
-                            onClick={() => handleRemoveField(col.key)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                            title="Remove Column"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button 
+                          onClick={() => handleRemoveField(col.key)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                          title="Remove Column"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -1402,6 +1407,16 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
         confirmText="Delete All"
         variant="danger"
         isLoading={isDeleting}
+      />
+      {/* Column Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isColumnDeleteConfirmOpen}
+        onClose={() => setIsColumnDeleteConfirmOpen(false)}
+        onConfirm={confirmColumnDelete}
+        title="Delete Column"
+        message={`Are you sure you want to permanently delete the column "${columnToDelete}"? This will remove it from all views for this subcategory.`}
+        confirmText="Delete Column"
+        variant="danger"
       />
     </div>
   );

@@ -100,7 +100,7 @@ const FIELD_ICONS: Record<string, any> = {
 };
 
 export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onCancel, departments = [] }) => {
-  const { deleteAsset, settings, assets } = useAssets();
+  const { deleteAsset, settings, assets, getEffectiveSchema } = useAssets();
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
@@ -460,20 +460,8 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
     );
   };
 
-  const schemaKey = `${formData.category}_${formData.subcategory}`;
-  const staticSchema = ASSET_SCHEMA[formData.subcategory];
-  const customSchema = settings?.customSchemas?.[schemaKey] || [];
-  
-  const combinedSchema: FieldDefinition[] = [];
-  const seenKeys = new Set<string>();
+  const effectiveSchema = getEffectiveSchema(formData.category, formData.subcategory);
   const commonKeys = new Set(COMMON_FIELDS.map(f => f.key));
-  
-  [...(staticSchema || []), ...customSchema].forEach(field => {
-    if (!seenKeys.has(field.key) && !commonKeys.has(field.key)) {
-      combinedSchema.push(field);
-      seenKeys.add(field.key);
-    }
-  });
 
   const subcategories = formData.category === 'Hardware' 
     ? ['System', 'Printer', 'Laptop', 'Networking', 'Display', 'Others', 'Vacant Systems (IT Stock)']
@@ -611,12 +599,8 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
           </select>
         </div>
 
-        {COMMON_FIELDS.filter(f => f.key !== 'remarks').map((field) => 
-          renderField(field.key, field)
-        )}
-
-        {combinedSchema.map((field) => 
-          renderField(field.key, field, !staticSchema?.find(sf => sf.key === field.key))
+        {effectiveSchema.filter(f => f.key !== 'remarks').map((field) => 
+          renderField(field.key, field, !commonKeys.has(field.key))
         )}
       </div>
 
@@ -639,7 +623,7 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
             
             {/* Custom fields from additionalFields */}
             {Object.entries(formData.additionalFields || {}).map(([key, value]) => {
-              if (combinedSchema.find(sf => sf.key === key) || COMMON_FIELDS.find(cf => cf.key === key)) return null;
+              if (effectiveSchema.find(sf => sf.key === key)) return null;
               return (
                 <div key={key} className="space-y-1.5">
                   <label className="flex items-center text-sm font-medium text-slate-700 dark:text-slate-300">

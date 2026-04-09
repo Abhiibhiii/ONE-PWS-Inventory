@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
-import { Asset, Activity, MaintenanceRecord, GlobalSettings, AssetCategory, AssetStatus, AssetHistory, FieldDefinition, GatePass, UserRole } from '../types';
+import { Asset, Activity, MaintenanceRecord, GlobalSettings, AssetCategory, AssetSubcategory, AssetStatus, AssetHistory, FieldDefinition, GatePass, UserRole } from '../types';
+import { ASSET_SCHEMA, COMMON_FIELDS } from '../constants/assetSchema';
 import { isWithinInterval, addDays, parseISO } from 'date-fns';
 import { db, auth } from '../firebase';
 import { toast } from 'sonner';
@@ -98,6 +99,7 @@ interface AssetContextType {
   getMaintenanceRecords: (assetId: string) => Promise<MaintenanceRecord[]>;
   addMaintenanceRecord: (assetId: string, record: Omit<MaintenanceRecord, 'id' | 'assetId' | 'uid'>) => Promise<void>;
   getWarrantyStatus: (invoiceDate: string | undefined, category: AssetCategory, subcategory: string, customDuration?: number) => { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null };
+  getEffectiveSchema: (category: string, subcategory: string) => FieldDefinition[];
   getFinancialYearStats: (year: number) => { added: number; repaired: number; ewaste: number };
   stats: {
     hardware: {
@@ -840,6 +842,30 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await setDoc(settingsRef, { columnOrders: updatedOrders }, { merge: true });
   };
 
+  const getEffectiveSchema = useCallback((category: string, subcategory: string): FieldDefinition[] => {
+    const schemaKey = `${category}_${subcategory}`;
+    if (settings?.customSchemas?.[schemaKey]) {
+      return settings.customSchemas[schemaKey];
+    }
+    
+    const staticSchema = ASSET_SCHEMA[subcategory as AssetSubcategory] || [];
+    // Filter out warrantyDurationMonths from common fields as it's handled via hardware/software warranty settings
+    const commonFields = COMMON_FIELDS.filter(f => f.key !== 'warrantyDurationMonths');
+    
+    // Combine and deduplicate by key
+    const seen = new Set<string>();
+    const schema: FieldDefinition[] = [];
+    
+    [...staticSchema, ...commonFields].forEach(f => {
+      if (!seen.has(f.key)) {
+        schema.push(f);
+        seen.add(f.key);
+      }
+    });
+    
+    return schema;
+  }, [settings]);
+
   const getWarrantyStatus = useCallback((invoiceDate: string | undefined, category: AssetCategory, subcategory: string, customDuration?: number): { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null } => {
     if (!invoiceDate || !settings) return { status: 'No Data', expiryDate: null };
     
@@ -1067,7 +1093,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [assets, settings, getWarrantyStatus]);
 
   return (
-    <AssetContext.Provider value={{ assets, activities, gatePasses, settings, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, bulkUpdateWarranty, assignAsset, addGatePass, updateGatePass, deleteGatePass, updateSettings, updateColumnWidths, updateColumnOrder, getAssetById, getAssetHistory, getMaintenanceRecords, addMaintenanceRecord, getWarrantyStatus, getFinancialYearStats, stats, vendors, isLoading }}>
+    <AssetContext.Provider value={{ assets, activities, gatePasses, settings, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, bulkUpdateWarranty, assignAsset, addGatePass, updateGatePass, deleteGatePass, updateSettings, updateColumnWidths, updateColumnOrder, getAssetById, getAssetHistory, getMaintenanceRecords, addMaintenanceRecord, getWarrantyStatus, getEffectiveSchema, getFinancialYearStats, stats, vendors, isLoading }}>
       {children}
     </AssetContext.Provider>
   );

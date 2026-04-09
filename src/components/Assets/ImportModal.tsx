@@ -46,7 +46,7 @@ interface RowError {
 }
 
 export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
-  const { settings, bulkImport } = useAssets();
+  const { settings, bulkImport, getEffectiveSchema } = useAssets();
   const [file, setFile] = useState<File | null>(null);
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
@@ -182,23 +182,14 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
       setFullData(jsonData);
       
       // Initialize Mappings immediately using the ALREADY SELECTED subcategory
-      const schemaKey = `${selectedCategory}_${selectedSubcategory}`;
-      const staticSchema = ASSET_SCHEMA[selectedSubcategory] || [];
-      const customSchema = settings?.customSchemas?.[schemaKey] || [];
-      
-      // Ensure allKnownFields is unique by key
-      const allKnownFieldsMap = new Map<string, any>();
-      [...COMMON_FIELDS, ...staticSchema, ...customSchema].forEach(f => {
-        if (f.key) allKnownFieldsMap.set(f.key, f);
-      });
-      const allKnownFields = Array.from(allKnownFieldsMap.values());
+      const effectiveSchema = getEffectiveSchema(selectedCategory, selectedSubcategory);
       
       const initialMappings: ColumnMapping[] = fileHeaders.map(header => {
         const headerStr = String(header || '');
         const normalizedHeader = headerStr.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
         
-        // Try to find a match in known fields
-        const match = allKnownFields.find(f => 
+        // Try to find a match in effective schema
+        const match = effectiveSchema.find(f => 
           (f.key && f.key.toLowerCase() === normalizedHeader) || 
           (f.label && f.label.toLowerCase() === headerStr.toLowerCase().trim()) ||
           (f.headers && f.headers.some(h => typeof h === 'string' && h.toLowerCase() === headerStr.toLowerCase().trim()))
@@ -451,16 +442,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
   };
 
   const renderMappingStep = () => {
-    const schemaKey = `${selectedCategory}_${selectedSubcategory}`;
-    const staticSchema = ASSET_SCHEMA[selectedSubcategory] || [];
-    const customSchema = settings?.customSchemas?.[schemaKey] || [];
-    
-    // Ensure allKnownFields is unique by key
-    const allKnownFieldsMap = new Map<string, any>();
-    [...COMMON_FIELDS, ...staticSchema, ...customSchema].forEach(f => {
-      if (f.key) allKnownFieldsMap.set(f.key, f);
-    });
-    const allKnownFields = Array.from(allKnownFieldsMap.values());
+    const allKnownFields = getEffectiveSchema(selectedCategory, selectedSubcategory);
 
     return (
       <div className="space-y-6">

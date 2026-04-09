@@ -6,7 +6,7 @@ import { Card } from '../UI/Card';
 import { Input } from '../UI/Input';
 import { useAssets } from '../../hooks/useAssets';
 import { useAuth } from '../../hooks/useAuth';
-import { Monitor, Keyboard, Mouse, Cpu, HardDrive, Layers, Shield, User, MapPin, Building, Calendar, Tag, Info, Activity, Clock, ShieldCheck, Plus, History, FileText, Download, Palette } from 'lucide-react';
+import { Monitor, Keyboard, Mouse, Cpu, HardDrive, Layers, Shield, User, MapPin, Building, Calendar, Tag, Info, Activity, Clock, ShieldCheck, Plus, History, FileText, Download, Palette, Hash } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { getRowColorClass } from '../../utils/assetUtils';
 import { format } from 'date-fns';
@@ -34,8 +34,37 @@ const DetailItem: React.FC<{ icon: any, label: string, value: string | number | 
   </div>
 );
 
+const FIELD_ICONS: Record<string, any> = {
+  name: Tag,
+  sysSlNo: Hash,
+  model: Monitor,
+  invoiceDate: Calendar,
+  invoiceNo: Hash,
+  vendor: Building,
+  warrantyDurationMonths: ShieldCheck,
+  value: Tag,
+  department: Building,
+  location: MapPin,
+  assignedTo: User,
+  systemName: Monitor,
+  processor: Cpu,
+  ramMb: Cpu,
+  hddGb: HardDrive,
+  os: Monitor,
+  licenseType: ShieldCheck,
+  productKey: Hash,
+  monitor: Monitor,
+  monitorSn: Hash,
+  keyboard: Monitor,
+  mouse: Monitor,
+  usbStatus: ShieldCheck,
+  ipAddress: Activity,
+  dynamicIp: Activity,
+  remarks: Info,
+};
+
 export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onUpdateStatus, onClose }) => {
-  const { getWarrantyStatus, settings, addGatePass, updateGatePass, vendors, updateAsset } = useAssets();
+  const { getWarrantyStatus, settings, addGatePass, updateGatePass, vendors, updateAsset, getEffectiveSchema } = useAssets();
   const { user } = useAuth();
   const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin';
   const [systemStatus, setSystemStatus] = useState<AssetStatus>(asset.status);
@@ -55,8 +84,7 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
     }
   }, [systemStatus, isAdmin]);
 
-  const schemaKey = `${asset.category}_${asset.subcategory}`;
-  const customSchema = settings?.customSchemas?.[schemaKey] || [];
+  const effectiveSchema = getEffectiveSchema(asset.category, asset.subcategory);
 
   const handleSave = async () => {
     setIsUpdating(true);
@@ -231,50 +259,27 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
               </Card>
             </div>
 
-            {/* Quick Specs */}
+            {/* Dynamic Fields from Schema */}
             <div className="space-y-4">
-              <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tight">Technical Specifications</h4>
-              <div className="grid grid-cols-1 gap-3">
-                {(asset.category === 'Hardware' && (asset.subcategory === 'System' || asset.subcategory === 'Laptop')) && (
-                  <>
-                    <DetailItem icon={Cpu} label="Processor" value={asset.processor} />
-                    <DetailItem icon={Layers} label="RAM" value={asset.ramMb ? `${asset.ramMb} MB` : 'N/A'} />
-                    <DetailItem icon={HardDrive} label="Storage" value={asset.hddGb ? `${asset.hddGb} GB` : 'N/A'} />
-                    <DetailItem icon={Shield} label="OS" value={asset.os} />
-                  </>
-                )}
-                {asset.subcategory === 'Printer' && (
-                  <DetailItem icon={Activity} label="IP Address" value={asset.ipAddress} />
-                )}
-                {(asset.subcategory === 'Printer' || asset.subcategory === 'Laptop') && (
-                  <DetailItem icon={Activity} label="Dynamic IP" value={asset.dynamicIp} />
-                )}
-                {/* Custom Fields */}
-                {customSchema.map(field => (
-                  <DetailItem 
-                    key={field.key} 
-                    icon={Info} 
-                    label={field.label} 
-                    value={asset.additionalFields?.[field.key] as string | number} 
-                  />
-                ))}
+              <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tight">Asset Details</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {effectiveSchema.filter(f => f.key !== 'remarks').map(field => {
+                  const value = (asset as any)[field.key] !== undefined ? (asset as any)[field.key] : asset.additionalFields?.[field.key];
+                  const Icon = (FIELD_ICONS as any)[field.key] || Info;
+                  
+                  return (
+                    <DetailItem 
+                      key={field.key} 
+                      icon={Icon} 
+                      label={field.label} 
+                      value={field.key === 'ramMb' && value ? `${value} MB` : 
+                             field.key === 'hddGb' && value ? `${value} GB` : 
+                             field.key === 'warrantyDurationMonths' && value ? `${value} Months` : 
+                             value} 
+                    />
+                  );
+                })}
               </div>
-            </div>
-          </div>
-
-          {/* Full Details Grid */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tight">Asset Information</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <DetailItem icon={Tag} label="Serial Number" value={asset.sysSlNo} />
-              <DetailItem icon={Info} label="System Name" value={asset.systemName} />
-              <DetailItem icon={ShieldCheck} label="Warranty Duration" value={asset.warrantyDurationMonths ? `${asset.warrantyDurationMonths} Months` : 'N/A'} />
-              <DetailItem icon={Building} label="Department" value={asset.department} />
-              <DetailItem icon={MapPin} label="Location" value={asset.location} />
-              <DetailItem icon={Calendar} label="Invoice Date" value={asset.invoiceDate} />
-              <DetailItem icon={Tag} label="Invoice No" value={asset.invoiceNo} />
-              <DetailItem icon={Building} label="Vendor" value={asset.vendor} />
-              <DetailItem icon={Shield} label="USB Status" value={asset.usbStatus} />
             </div>
           </div>
 
