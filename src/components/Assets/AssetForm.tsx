@@ -611,7 +611,7 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
           </select>
         </div>
 
-        {COMMON_FIELDS.map((field) => 
+        {COMMON_FIELDS.filter(f => f.key !== 'remarks').map((field) => 
           renderField(field.key, field)
         )}
 

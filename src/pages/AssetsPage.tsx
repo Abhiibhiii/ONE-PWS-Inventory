@@ -8,7 +8,8 @@ import { Modal } from '../components/UI/Modal';
 import { AssetForm } from '../components/Assets/AssetForm';
 import { ImportModal } from '../components/Assets/ImportModal';
 import { AssetDetailsModal } from '../components/Assets/AssetDetailsModal';
-import { Search, Plus, Filter, Download, Upload, MoreVertical, Trash2, Edit, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Eye, FileDown, UserPlus, Activity, RotateCcw } from 'lucide-react';
+import { Search, Plus, Filter, Download, Upload, MoreVertical, Trash2, Edit, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Eye, FileDown, UserPlus, Activity, RotateCcw, GripVertical } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'motion/react';
 import { Asset, AssetCategory, AssetSubcategory, AssetStatus, FieldDefinition } from '../types';
 import { ASSET_SCHEMA, COMMON_FIELDS } from '../constants/assetSchema';
@@ -28,7 +29,7 @@ interface AssetsPageProps {
 }
 
 export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAction }) => {
-  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, updateColumnWidths, getWarrantyStatus, settings, isLoading } = useAssets();
+  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, updateColumnWidths, updateColumnOrder, getWarrantyStatus, settings, isLoading } = useAssets();
   const { user } = useAuth();
 
   if (isLoading) {
@@ -329,42 +330,63 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
   const rowColorFilters = ['All', 'White', 'Red', 'Violet', 'Green'];
 
   const departments = useMemo(() => {
-    const filteredAssets = assets.filter(a => 
-      (categoryFilter === 'All' || String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase()) &&
-      (subcategoryFilter === 'All' || String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase())
-    );
-    const depts = new Set(
-      filteredAssets
-        .map(a => String(a.department || '').trim())
-        .filter(d => d !== '' && d !== 'N/A')
-    );
-    return ['All', ...Array.from(depts).sort((a, b) => (a as string).localeCompare(b as string))];
+    const filteredAssets = assets.filter(a => {
+      const catMatch = categoryFilter === 'All' || 
+                       String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase();
+      const subMatch = subcategoryFilter === 'All' || 
+                       String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase();
+      return catMatch && subMatch;
+    });
+    
+    const depts = new Set<string>();
+    filteredAssets.forEach(a => {
+      const dept = String(a.department || '').trim();
+      if (dept && dept !== 'N/A') {
+        depts.add(dept);
+      }
+    });
+    
+    return ['All', ...Array.from(depts).sort((a, b) => a.localeCompare(b))];
   }, [assets, categoryFilter, subcategoryFilter]);
 
   const locations = useMemo(() => {
-    const filteredAssets = assets.filter(a => 
-      (categoryFilter === 'All' || String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase()) &&
-      (subcategoryFilter === 'All' || String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase())
-    );
-    const locs = new Set(
-      filteredAssets
-        .map(a => String(a.location || '').trim())
-        .filter(l => l !== '' && l !== 'N/A')
-    );
-    return ['All', ...Array.from(locs).sort((a, b) => (a as string).localeCompare(b as string))];
+    const filteredAssets = assets.filter(a => {
+      const catMatch = categoryFilter === 'All' || 
+                       String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase();
+      const subMatch = subcategoryFilter === 'All' || 
+                       String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase();
+      return catMatch && subMatch;
+    });
+    
+    const locs = new Set<string>();
+    filteredAssets.forEach(a => {
+      const loc = String(a.location || '').trim();
+      if (loc && loc !== 'N/A') {
+        locs.add(loc);
+      }
+    });
+    
+    return ['All', ...Array.from(locs).sort((a, b) => a.localeCompare(b))];
   }, [assets, categoryFilter, subcategoryFilter]);
 
   const vendors = useMemo(() => {
-    const filteredAssets = assets.filter(a => 
-      (categoryFilter === 'All' || String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase()) &&
-      (subcategoryFilter === 'All' || String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase())
-    );
-    const vends = new Set(
-      filteredAssets
-        .map(a => String(a.vendor || '').trim())
-        .filter(v => v !== '' && v !== 'N/A')
-    );
-    return ['All', ...Array.from(vends).sort((a, b) => (a as string).localeCompare(b as string))];
+    const filteredAssets = assets.filter(a => {
+      const catMatch = categoryFilter === 'All' || 
+                       String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase();
+      const subMatch = subcategoryFilter === 'All' || 
+                       String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase();
+      return catMatch && subMatch;
+    });
+    
+    const vSet = new Set<string>();
+    filteredAssets.forEach(a => {
+      const v = String(a.vendor || '').trim();
+      if (v && v !== 'N/A') {
+        vSet.add(v);
+      }
+    });
+    
+    return ['All', ...Array.from(vSet).sort((a, b) => a.localeCompare(b))];
   }, [assets, categoryFilter, subcategoryFilter]);
 
   const handleRemoveField = async (fieldKey: string) => {
@@ -423,6 +445,8 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
     const statusCol = [{ key: 'status', label: 'STATUS' }];
     const warrantyCol = [{ key: 'warranty', label: 'WARRANTY STATUS' }];
 
+    let cols: { key: string; label: string }[] = [];
+
     if (isSubcategoryView) {
       const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
       const staticSchema = ASSET_SCHEMA[subcategoryFilter as AssetSubcategory] || [];
@@ -456,49 +480,85 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
         seenDynamicKeys.add(f.key);
       });
       
-      const uniqueCols: { key: string; label: string }[] = [];
-      const seenKeys = new Set<string>();
+      cols = [...selectionCol, ...snoCol, ...dynamicCols, ...statusCol, ...warrantyCol, ...actionsCol];
+    } else {
+      const baseColumns = [
+        ...selectionCol,
+        ...snoCol,
+        { key: 'name', label: 'NAME' },
+        { key: 'sysSlNo', label: 'SERIAL NO.' },
+      ];
+
+      if (categoryFilter !== 'All') {
+        cols = [
+          ...baseColumns,
+          { key: 'subcategory', label: 'TYPE' },
+          ...statusCol,
+          ...warrantyCol,
+          ...actionsCol,
+        ];
+      } else {
+        cols = [
+          ...baseColumns,
+          { key: 'category', label: 'CATEGORY' },
+          { key: 'subcategory', label: 'TYPE' },
+          ...statusCol,
+          ...warrantyCol,
+          ...actionsCol,
+        ];
+      }
+    }
+
+    // Deduplicate
+    const uniqueCols: { key: string; label: string }[] = [];
+    const seenKeys = new Set<string>();
+    cols.forEach(col => {
+      if (!seenKeys.has(col.key)) {
+        uniqueCols.push(col);
+        seenKeys.add(col.key);
+      }
+    });
+
+    // Apply saved column order if available
+    const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
+    const savedOrder = settings?.columnOrders?.[schemaKey];
+    
+    if (savedOrder && savedOrder.length > 0) {
+      const orderedCols: { key: string; label: string }[] = [];
       
-      [...selectionCol, ...snoCol, ...dynamicCols, ...statusCol, ...warrantyCol, ...actionsCol].forEach((col: any) => {
-        if (!seenKeys.has(col.key)) {
-          uniqueCols.push(col);
-          seenKeys.add(col.key);
+      // First, add columns in the saved order if they exist in current cols
+      savedOrder.forEach(key => {
+        const col = uniqueCols.find(c => c.key === key);
+        if (col) {
+          orderedCols.push(col);
         }
       });
-
-      return uniqueCols;
+      
+      // Then, add any new columns that weren't in the saved order
+      uniqueCols.forEach(col => {
+        if (!orderedCols.find(c => c.key === col.key)) {
+          orderedCols.push(col);
+        }
+      });
+      
+      return orderedCols;
     }
 
-    // For Category view or All view
-    const baseColumns = [
-      ...selectionCol,
-      ...snoCol,
-      { key: 'name', label: 'NAME' },
-      { key: 'sysSlNo', label: 'SERIAL NO.' },
-    ];
-
-    if (categoryFilter !== 'All') {
-      return [
-        ...baseColumns,
-        { key: 'subcategory', label: 'TYPE' },
-        ...statusCol,
-        ...warrantyCol,
-        ...actionsCol,
-      ];
-    }
-
-    // Default for 'All'
-    return [
-      ...baseColumns,
-      { key: 'category', label: 'CATEGORY' },
-      { key: 'subcategory', label: 'TYPE' },
-      ...statusCol,
-      ...warrantyCol,
-      ...actionsCol,
-    ];
+    return uniqueCols;
   };
 
   const columns = getColumns();
+
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    
+    const items = Array.from(columns);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    
+    const newOrder = items.map(col => col.key);
+    updateColumnOrder(categoryFilter, subcategoryFilter, newOrder);
+  };
 
   const handleAddAsset = (data: Omit<Asset, 'id'>) => {
     addAsset(data);
@@ -847,70 +907,97 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
 
       <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
-              <tr>
-                {columns.map((col) => {
-                  const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
-                  const savedWidth = settings?.columnWidths?.[schemaKey]?.[col.key];
-                  
-                  return (
-                    <th
-                      key={col.key}
-                      data-key={col.key}
-                      style={{ 
-                        width: savedWidth ? `${savedWidth}px` : 'auto',
-                        minWidth: savedWidth ? `${savedWidth}px` : 'auto'
-                      }}
-                      className="group relative px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap"
-                      onClick={() => {
-                        if (col.key === 'selection') {
-                          toggleSelectAll();
-                          return;
-                        }
-                        if (col.key !== 'actions' && !col.key.includes('Warranty')) {
-                          handleSort(col.key);
-                        }
-                      }}
-                    >
-                      <div className="flex items-center">
-                        {col.key === 'selection' ? (
-                          <div className="flex items-center space-x-2">
-                            <input 
-                              type="checkbox" 
-                              checked={selectedAssetIds.length > 0 && selectedAssetIds.length === filteredAndSortedAssets.length}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                toggleSelectAll();
-                              }}
-                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <span className="text-[9px] font-bold">ALL</span>
-                          </div>
-                        ) : (
-                          <>
-                            {col.label}
-                            {sortConfig?.key === col.key && (
-                              sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+          <DragDropContext onDragEnd={onDragEnd}>
+            <table className="w-full text-left text-sm">
+              <Droppable droppableId="columns" direction="horizontal">
+                {(provided) => (
+                  <thead 
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400"
+                  >
+                    <tr>
+                      {columns.map((col, index) => {
+                        const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
+                        const savedWidth = settings?.columnWidths?.[schemaKey]?.[col.key];
+                        
+                        const DraggableComponent = Draggable as any;
+
+                        return (
+                          <DraggableComponent key={col.key} draggableId={col.key} index={index}>
+                            {(provided: any, snapshot: any) => (
+                              <th
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                data-key={col.key}
+                                style={{ 
+                                  ...provided.draggableProps.style,
+                                  width: savedWidth ? `${savedWidth}px` : 'auto',
+                                  minWidth: savedWidth ? `${savedWidth}px` : 'auto'
+                                } as React.CSSProperties}
+                                className={cn(
+                                  "group relative px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap",
+                                  snapshot.isDragging && "bg-white shadow-xl z-50 dark:bg-slate-900"
+                                )}
+                                onClick={() => {
+                                  if (col.key === 'selection') {
+                                    toggleSelectAll();
+                                    return;
+                                  }
+                                  if (col.key !== 'actions' && !col.key.includes('Warranty')) {
+                                    handleSort(col.key);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center">
+                                  {col.key !== 'selection' && col.key !== 'actions' && (
+                                    <div className="mr-1.5 text-slate-300 hover:text-indigo-500">
+                                      <GripVertical className="h-3 w-3" />
+                                    </div>
+                                  )}
+                                  {col.key === 'selection' ? (
+                                    <div className="flex items-center space-x-2">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={selectedAssetIds.length > 0 && selectedAssetIds.length === filteredAndSortedAssets.length}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          toggleSelectAll();
+                                        }}
+                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                      />
+                                      <span className="text-[9px] font-bold">ALL</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {col.label}
+                                      {sortConfig?.key === col.key && (
+                                        sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+                                      )}
+                                      {sortConfig?.key !== col.key && col.key !== 'actions' && !col.key.includes('Warranty') && col.key !== 'selection' && (
+                                        <ArrowUpDown className="ml-1 h-3 w-3 opacity-30" />
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                {col.key !== 'selection' && col.key !== 'actions' && (
+                                  <div
+                                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onMouseDown={(e) => handleMouseDown(e, col.key)}
+                                  />
+                                )}
+                              </th>
                             )}
-                            {sortConfig?.key !== col.key && col.key !== 'actions' && !col.key.includes('Warranty') && col.key !== 'selection' && (
-                              <ArrowUpDown className="ml-1 h-3 w-3 opacity-30" />
-                            )}
-                          </>
-                        )}
-                      </div>
-                      {col.key !== 'selection' && col.key !== 'actions' && (
-                        <div
-                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onMouseDown={(e) => handleMouseDown(e, col.key)}
-                        />
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                          </DraggableComponent>
+                        );
+                      })}
+                      {provided.placeholder}
+                    </tr>
+                  </thead>
+                )}
+              </Droppable>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               <AnimatePresence mode="popLayout">
                 {paginatedAssets.map((asset, index) => (
                   <motion.tr
@@ -1045,6 +1132,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
               </AnimatePresence>
             </tbody>
           </table>
+          </DragDropContext>
         </div>
 
         {/* Pagination */}

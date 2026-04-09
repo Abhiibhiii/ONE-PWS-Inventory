@@ -185,7 +185,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
       const schemaKey = `${selectedCategory}_${selectedSubcategory}`;
       const staticSchema = ASSET_SCHEMA[selectedSubcategory] || [];
       const customSchema = settings?.customSchemas?.[schemaKey] || [];
-      const allKnownFields = [...COMMON_FIELDS, ...staticSchema, ...customSchema];
+      
+      // Ensure allKnownFields is unique by key
+      const allKnownFieldsMap = new Map<string, any>();
+      [...COMMON_FIELDS, ...staticSchema, ...customSchema].forEach(f => {
+        if (f.key) allKnownFieldsMap.set(f.key, f);
+      });
+      const allKnownFields = Array.from(allKnownFieldsMap.values());
       
       const initialMappings: ColumnMapping[] = fileHeaders.map(header => {
         const headerStr = String(header || '');
@@ -448,7 +454,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
     const schemaKey = `${selectedCategory}_${selectedSubcategory}`;
     const staticSchema = ASSET_SCHEMA[selectedSubcategory] || [];
     const customSchema = settings?.customSchemas?.[schemaKey] || [];
-    const allKnownFields = [...COMMON_FIELDS, ...staticSchema, ...customSchema];
+    
+    // Ensure allKnownFields is unique by key
+    const allKnownFieldsMap = new Map<string, any>();
+    [...COMMON_FIELDS, ...staticSchema, ...customSchema].forEach(f => {
+      if (f.key) allKnownFieldsMap.set(f.key, f);
+    });
+    const allKnownFields = Array.from(allKnownFieldsMap.values());
 
     return (
       <div className="space-y-6">
@@ -495,7 +507,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
                         className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950"
                       >
                         <option value="">-- Manual Entry --</option>
-                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                        {headers.map((h, hIdx) => <option key={`${h}-${hIdx}`} value={h}>{h}</option>)}
                       </select>
                     </td>
                     <td className="px-4 py-3">
@@ -520,7 +532,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
                           className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950"
                         >
                           <optgroup label="Standard Fields">
-                            {allKnownFields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                            {allKnownFields.map(f => <option key={`field-${f.key}`} value={f.key}>{f.label}</option>)}
                           </optgroup>
                           <option value="custom">-- Custom Field --</option>
                         </select>
@@ -697,8 +709,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
               <tr>
                 <th className="px-3 py-2 w-10"></th>
                 <th className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Row Colour</th>
-                {activeMappings.map(m => (
-                  <th key={m.mappedField} className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                {activeMappings.map((m, mIdx) => (
+                  <th key={`${m.mappedField}-${mIdx}`} className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                     {m.label}
                   </th>
                 ))}
@@ -735,8 +747,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
                       {COLOR_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </td>
-                  {activeMappings.map(m => (
-                    <td key={m.mappedField} className="px-3 py-2">
+                  {activeMappings.map((m, mIdx) => (
+                    <td key={`${m.mappedField}-${mIdx}`} className="px-3 py-2">
                       <div className="flex flex-col">
                         <span className="text-slate-900 dark:text-white">{row[m.mappedField]}</span>
                         {row._errors.find((e: RowError) => e.field === m.label) && (

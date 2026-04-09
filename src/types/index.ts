@@ -115,6 +115,7 @@ export interface GlobalSettings {
   gatePassHeaders?: Record<string, string>;
   gatePassCounter?: number;
   columnWidths?: Record<string, Record<string, number>>;
+  columnOrders?: Record<string, string[]>;
   uid: string;
 }
 
