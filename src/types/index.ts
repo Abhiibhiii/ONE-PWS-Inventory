@@ -114,6 +114,7 @@ export interface GlobalSettings {
   customSchemas?: Record<string, FieldDefinition[]>;
   gatePassHeaders?: Record<string, string>;
   gatePassCounter?: number;
+  columnWidths?: Record<string, Record<string, number>>;
   uid: string;
 }
 

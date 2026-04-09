@@ -42,11 +42,13 @@ import { extractInvoiceData, InvoiceData, isAIEnabled } from '../../services/ocr
 import { OcrValidationModal } from './OcrValidationModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { ASSET_SCHEMA, COMMON_FIELDS } from '../../constants/assetSchema';
+import { OFFICIAL_DEPARTMENTS } from '../../constants/departments';
 
 interface AssetFormProps {
   initialData?: Asset;
   onSubmit: (data: Omit<Asset, 'id' | 'uid'>) => void;
   onCancel: () => void;
+  departments?: string[];
 }
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -97,7 +99,7 @@ const FIELD_ICONS: Record<string, any> = {
   remarks: Info,
 };
 
-export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onCancel }) => {
+export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onCancel, departments = [] }) => {
   const { deleteAsset, settings, assets } = useAssets();
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -215,6 +217,11 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
     // Final sanitization
     const sanitizedData = { ...formData };
     
+    // Normalize fields
+    if (sanitizedData.department) sanitizedData.department = sanitizedData.department.trim();
+    if (sanitizedData.location) sanitizedData.location = sanitizedData.location.trim();
+    if (sanitizedData.vendor) sanitizedData.vendor = sanitizedData.vendor.trim();
+    
     // Enforce uppercase for specific fields
     if (sanitizedData.productKey) sanitizedData.productKey = sanitizedData.productKey.toUpperCase();
     if (sanitizedData.sysSlNo) sanitizedData.sysSlNo = sanitizedData.sysSlNo.toUpperCase();
@@ -319,7 +326,39 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
     const inputName = isAdditional ? `additionalFields.${fieldName}` : fieldName;
     const isHighlighted = highlightFields.includes(fieldName);
 
+    if (fieldName === 'department' || fieldName === 'location') {
+      const options = fieldName === 'department' 
+        ? (departments.length > 0 ? departments.filter(d => d !== 'All') : OFFICIAL_DEPARTMENTS)
+        : (assets.length > 0 ? Array.from(new Set(assets.map(a => a.location).filter(Boolean))).sort() : []);
+
+      return (
+        <div key={fieldName} className="space-y-1.5">
+          <label className="flex items-center text-sm font-medium text-slate-700 dark:text-slate-300">
+            <Icon className="mr-2 h-4 w-4 text-slate-400" />
+            {config.label}
+          </label>
+          <input
+            list={`${fieldName}-options`}
+            name={inputName}
+            value={value}
+            onChange={handleChange}
+            placeholder={`Type or select ${fieldName}`}
+            className={cn(
+              "flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white",
+              isHighlighted && "ring-2 ring-emerald-500 animate-pulse"
+            )}
+          />
+          <datalist id={`${fieldName}-options`}>
+            {options.map((opt: string) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
+        </div>
+      );
+    }
+
     if (config.type === 'select') {
+      const options = config.options || [];
       return (
         <div key={fieldName} className="space-y-1.5">
           <label className="flex items-center text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -335,7 +374,8 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
               isHighlighted && "ring-2 ring-emerald-500 animate-pulse"
             )}
           >
-            {config.options.map((opt: string) => (
+            <option value="">Select Department</option>
+            {options.map((opt: string) => (
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>

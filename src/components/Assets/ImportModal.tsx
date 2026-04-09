@@ -23,6 +23,7 @@ import { cn } from '../../utils/cn';
 import { getRowColorClass } from '../../utils/assetUtils';
 import { useAssets } from '../../hooks/useAssets';
 import { ASSET_SCHEMA, COMMON_FIELDS } from '../../constants/assetSchema';
+import { OFFICIAL_DEPARTMENTS } from '../../constants/departments';
 
 interface ImportModalProps {
   onClose: () => void;
@@ -332,6 +333,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
           val = (val !== undefined && val !== null && String(val).trim() !== '') ? String(val).trim() : "N/A";
           if (val.toUpperCase() === 'NA' || val.toUpperCase() === 'N/A') {
             val = "N/A";
+          }
+          
+          if (m.mappedField === 'department' && val !== 'N/A') {
+            val = String(val).trim();
           }
         }
         

@@ -91,6 +91,7 @@ interface AssetContextType {
   updateGatePass: (assetId: string, gatePassId: string, gatePass: Partial<GatePass>) => Promise<void>;
   deleteGatePass: (assetId: string, gatePassId: string) => Promise<void>;
   updateSettings: (settings: Partial<GlobalSettings>) => Promise<void>;
+  updateColumnWidths: (category: string, subcategory: string, widths: Record<string, number>) => Promise<void>;
   getAssetById: (id: string) => Asset | undefined;
   getAssetHistory: (assetId: string) => Promise<AssetHistory[]>;
   getMaintenanceRecords: (assetId: string) => Promise<MaintenanceRecord[]>;
@@ -811,6 +812,22 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const updateColumnWidths = async (category: string, subcategory: string, widths: Record<string, number> | null) => {
+    if (!user || !settings) return;
+    const settingsRef = doc(db, 'settings', 'global-settings');
+    const schemaKey = `${category}_${subcategory}`;
+    let updatedWidths = { ...(settings.columnWidths || {}) };
+    if (widths === null) {
+      delete updatedWidths[schemaKey];
+    } else {
+      updatedWidths[schemaKey] = {
+        ...(updatedWidths[schemaKey] || {}),
+        ...widths
+      };
+    }
+    await setDoc(settingsRef, { columnWidths: updatedWidths }, { merge: true });
+  };
+
   const getWarrantyStatus = useCallback((invoiceDate: string | undefined, category: AssetCategory, subcategory: string, customDuration?: number): { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null } => {
     if (!invoiceDate || !settings) return { status: 'No Data', expiryDate: null };
     
@@ -1038,7 +1055,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [assets, settings, getWarrantyStatus]);
 
   return (
-    <AssetContext.Provider value={{ assets, activities, gatePasses, settings, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, bulkUpdateWarranty, assignAsset, addGatePass, updateGatePass, deleteGatePass, updateSettings, getAssetById, getAssetHistory, getMaintenanceRecords, addMaintenanceRecord, getWarrantyStatus, getFinancialYearStats, stats, vendors, isLoading }}>
+    <AssetContext.Provider value={{ assets, activities, gatePasses, settings, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, bulkUpdateWarranty, assignAsset, addGatePass, updateGatePass, deleteGatePass, updateSettings, updateColumnWidths, getAssetById, getAssetHistory, getMaintenanceRecords, addMaintenanceRecord, getWarrantyStatus, getFinancialYearStats, stats, vendors, isLoading }}>
       {children}
     </AssetContext.Provider>
   );

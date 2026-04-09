@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAssets } from '../hooks/useAssets';
 import { useAuth } from '../hooks/useAuth';
 import { Card } from '../components/UI/Card';
@@ -8,10 +8,11 @@ import { Modal } from '../components/UI/Modal';
 import { AssetForm } from '../components/Assets/AssetForm';
 import { ImportModal } from '../components/Assets/ImportModal';
 import { AssetDetailsModal } from '../components/Assets/AssetDetailsModal';
-import { Search, Plus, Filter, Download, Upload, MoreVertical, Trash2, Edit, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Eye, FileDown, UserPlus, Activity } from 'lucide-react';
+import { Search, Plus, Filter, Download, Upload, MoreVertical, Trash2, Edit, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Eye, FileDown, UserPlus, Activity, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Asset, AssetCategory, AssetSubcategory, AssetStatus, FieldDefinition } from '../types';
 import { ASSET_SCHEMA, COMMON_FIELDS } from '../constants/assetSchema';
+import { OFFICIAL_DEPARTMENTS } from '../constants/departments';
 import { isAfter, isBefore, parseISO, startOfDay, endOfDay, addDays, isWithinInterval, format } from 'date-fns';
 import { cn } from '../utils/cn';
 import { getColumnColorClass, getRowColorClass } from '../utils/assetUtils';
@@ -27,7 +28,7 @@ interface AssetsPageProps {
 }
 
 export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAction }) => {
-  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, getWarrantyStatus, settings, isLoading } = useAssets();
+  const { assets, addAsset, updateAsset, deleteAsset, updateSchema, recoverSchema, bulkImport, bulkDelete, bulkUpdateStatus, updateColumnWidths, getWarrantyStatus, settings, isLoading } = useAssets();
   const { user } = useAuth();
 
   if (isLoading) {
@@ -45,6 +46,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
   const [departmentFilter, setDepartmentFilter] = useState<string>('All');
   const [locationFilter, setLocationFilter] = useState<string>('All');
   const [vendorFilter, setVendorFilter] = useState<string>('All');
+  const [rowColorFilter, setRowColorFilter] = useState<string>('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
@@ -72,8 +74,71 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const handleMouseDown = (e: React.MouseEvent, key: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingColumn(key);
+    setStartX(e.pageX);
+    const th = (e.target as HTMLElement).closest('th');
+    if (th) {
+      setStartWidth(th.offsetWidth);
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizingColumn) return;
+      const diff = e.pageX - startX;
+      const newWidth = Math.max(50, startWidth + diff);
+      
+      const ths = document.querySelectorAll('th');
+      ths.forEach(th => {
+        if (th.getAttribute('data-key') === resizingColumn) {
+          (th as HTMLElement).style.width = `${newWidth}px`;
+          (th as HTMLElement).style.minWidth = `${newWidth}px`;
+        }
+      });
+    };
+
+    const handleMouseUp = () => {
+      if (resizingColumn) {
+        const th = document.querySelector(`th[data-key="${resizingColumn}"]`) as HTMLElement;
+        if (th) {
+          const finalWidth = th.offsetWidth;
+          updateColumnWidths(categoryFilter, subcategoryFilter, { [resizingColumn]: finalWidth });
+        }
+        setResizingColumn(null);
+      }
+    };
+
+    if (resizingColumn) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingColumn, startX, startWidth, categoryFilter, subcategoryFilter, updateColumnWidths]);
+
+  useEffect(() => {
+    setDepartmentFilter('All');
+    setLocationFilter('All');
+    setVendorFilter('All');
+    setRowColorFilter('All');
+    setStatusFilter('All');
+    setWarrantyFilter('All');
+    setStartDate('');
+    setEndDate('');
+    setCurrentPage(1);
+  }, [categoryFilter, subcategoryFilter]);
 
   const handleSort = (key: string) => {
     setSortConfig(current => {
@@ -94,13 +159,27 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                            (a.sysSlNo && a.sysSlNo.toLowerCase().includes(searchLower)) ||
                            (a.model && a.model.toLowerCase().includes(searchLower)) ||
                            (a.systemName && a.systemName.toLowerCase().includes(searchLower));
-      const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter || (categoryFilter === 'E-Waste' && (a.status === 'E-Waste' || a.status === 'Move to E-Waste'));
+      const matchesCategory = categoryFilter === 'All' || 
+                             String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase() || 
+                             (categoryFilter === 'E-Waste' && (a.status === 'E-Waste' || a.status === 'Move to E-Waste'));
+      
       const matchesSubcategory = subcategoryFilter === 'All' || 
-                                (subcategoryFilter === 'Vacant Systems (IT Stock)' ? a.status === 'In IT Stock' : a.subcategory === subcategoryFilter);
+                                (subcategoryFilter === 'Vacant Systems (IT Stock)' 
+                                  ? a.status === 'In IT Stock' 
+                                  : String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase());
+      
       const matchesStatus = statusFilter === 'All' || a.status === statusFilter;
-      const matchesDepartment = departmentFilter === 'All' || a.department === departmentFilter;
-      const matchesLocation = locationFilter === 'All' || a.location === locationFilter;
-      const matchesVendor = vendorFilter === 'All' || a.vendor === vendorFilter;
+      
+      const matchesDepartment = departmentFilter === 'All' || 
+                               String(a.department || '').trim().toLowerCase() === String(departmentFilter).trim().toLowerCase();
+      
+      const matchesLocation = locationFilter === 'All' || 
+                             String(a.location || '').trim().toLowerCase() === String(locationFilter).trim().toLowerCase();
+      
+      const matchesVendor = vendorFilter === 'All' || 
+                           String(a.vendor || '').trim().toLowerCase() === String(vendorFilter).trim().toLowerCase();
+      
+      const matchesRowColor = rowColorFilter === 'All' || (a.rowColor || 'White') === rowColorFilter;
       
       let matchesWarranty = true;
       if (warrantyFilter !== 'All') {
@@ -133,7 +212,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
         }
       }
 
-      return matchesSearch && matchesCategory && matchesSubcategory && matchesStatus && matchesWarranty && matchesDate && matchesDepartment && matchesLocation && matchesVendor;
+      return matchesSearch && matchesCategory && matchesSubcategory && matchesStatus && matchesWarranty && matchesDate && matchesDepartment && matchesLocation && matchesVendor && matchesRowColor;
     });
 
     if (sortConfig) {
@@ -217,7 +296,8 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
     startDate, 
     endDate, 
     sortConfig,
-    getWarrantyStatus
+    getWarrantyStatus,
+    rowColorFilter
   ]);
 
   const totalPages = Math.ceil(filteredAndSortedAssets.length / itemsPerPage);
@@ -246,10 +326,46 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
 
   const statuses: (AssetStatus | 'All')[] = ['All', 'Active', 'In Repair', 'Replaced', 'Move to E-Waste', 'E-Waste', 'Inactive', 'In IT Stock'];
   const warrantyFilters = ['All', 'In Warranty', 'Expiring', 'Expired', 'No Data'];
+  const rowColorFilters = ['All', 'White', 'Red', 'Violet', 'Green'];
 
-  const departments = useMemo(() => ['All', ...new Set(assets.map(a => a.department).filter(Boolean))], [assets]);
-  const locations = useMemo(() => ['All', ...new Set(assets.map(a => a.location).filter(Boolean))], [assets]);
-  const vendors = useMemo(() => ['All', ...new Set(assets.map(a => a.vendor).filter(Boolean))], [assets]);
+  const departments = useMemo(() => {
+    const filteredAssets = assets.filter(a => 
+      (categoryFilter === 'All' || String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase()) &&
+      (subcategoryFilter === 'All' || String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase())
+    );
+    const depts = new Set(
+      filteredAssets
+        .map(a => String(a.department || '').trim())
+        .filter(d => d !== '' && d !== 'N/A')
+    );
+    return ['All', ...Array.from(depts).sort((a, b) => (a as string).localeCompare(b as string))];
+  }, [assets, categoryFilter, subcategoryFilter]);
+
+  const locations = useMemo(() => {
+    const filteredAssets = assets.filter(a => 
+      (categoryFilter === 'All' || String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase()) &&
+      (subcategoryFilter === 'All' || String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase())
+    );
+    const locs = new Set(
+      filteredAssets
+        .map(a => String(a.location || '').trim())
+        .filter(l => l !== '' && l !== 'N/A')
+    );
+    return ['All', ...Array.from(locs).sort((a, b) => (a as string).localeCompare(b as string))];
+  }, [assets, categoryFilter, subcategoryFilter]);
+
+  const vendors = useMemo(() => {
+    const filteredAssets = assets.filter(a => 
+      (categoryFilter === 'All' || String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase()) &&
+      (subcategoryFilter === 'All' || String(a.subcategory || '').trim().toLowerCase() === String(subcategoryFilter).trim().toLowerCase())
+    );
+    const vends = new Set(
+      filteredAssets
+        .map(a => String(a.vendor || '').trim())
+        .filter(v => v !== '' && v !== 'N/A')
+    );
+    return ['All', ...Array.from(vends).sort((a, b) => (a as string).localeCompare(b as string))];
+  }, [assets, categoryFilter, subcategoryFilter]);
 
   const handleRemoveField = async (fieldKey: string) => {
     if (categoryFilter === 'All' || subcategoryFilter === 'All') return;
@@ -677,6 +793,16 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                     {vendors.map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-slate-500">Color:</span>
+                  <select
+                    value={rowColorFilter}
+                    onChange={e => setRowColorFilter(e.target.value)}
+                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                  >
+                    {rowColorFilters.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
           
@@ -696,7 +822,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                 onChange={e => setEndDate(e.target.value)}
                 className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
               />
-              {(startDate || endDate || departmentFilter !== 'All' || locationFilter !== 'All' || vendorFilter !== 'All') && (
+              {(startDate || endDate || departmentFilter !== 'All' || locationFilter !== 'All' || vendorFilter !== 'All' || rowColorFilter !== 'All') && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -706,6 +832,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                     setDepartmentFilter('All');
                     setLocationFilter('All');
                     setVendorFilter('All');
+                    setRowColorFilter('All');
                   }} 
                   className="h-8 text-xs text-red-500"
                 >
@@ -723,48 +850,64 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
               <tr>
-                {columns.map((col) => (
-                  <th
-                    key={col.key}
-                    className="px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap"
-                    onClick={() => {
-                      if (col.key === 'selection') {
-                        toggleSelectAll();
-                        return;
-                      }
-                      if (col.key !== 'actions' && !col.key.includes('Warranty')) {
-                        handleSort(col.key);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center">
-                      {col.key === 'selection' ? (
-                        <div className="flex items-center space-x-2">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedAssetIds.length > 0 && selectedAssetIds.length === filteredAndSortedAssets.length}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              toggleSelectAll();
-                            }}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
-                          <span className="text-[9px] font-bold">ALL</span>
-                        </div>
-                      ) : (
-                        <>
-                          {col.label}
-                          {sortConfig?.key === col.key && (
-                            sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-                          )}
-                          {sortConfig?.key !== col.key && col.key !== 'actions' && !col.key.includes('Warranty') && col.key !== 'selection' && (
-                            <ArrowUpDown className="ml-1 h-3 w-3 opacity-30" />
-                          )}
-                        </>
+                {columns.map((col) => {
+                  const schemaKey = `${categoryFilter}_${subcategoryFilter}`;
+                  const savedWidth = settings?.columnWidths?.[schemaKey]?.[col.key];
+                  
+                  return (
+                    <th
+                      key={col.key}
+                      data-key={col.key}
+                      style={{ 
+                        width: savedWidth ? `${savedWidth}px` : 'auto',
+                        minWidth: savedWidth ? `${savedWidth}px` : 'auto'
+                      }}
+                      className="group relative px-4 py-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap"
+                      onClick={() => {
+                        if (col.key === 'selection') {
+                          toggleSelectAll();
+                          return;
+                        }
+                        if (col.key !== 'actions' && !col.key.includes('Warranty')) {
+                          handleSort(col.key);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center">
+                        {col.key === 'selection' ? (
+                          <div className="flex items-center space-x-2">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedAssetIds.length > 0 && selectedAssetIds.length === filteredAndSortedAssets.length}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleSelectAll();
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className="text-[9px] font-bold">ALL</span>
+                          </div>
+                        ) : (
+                          <>
+                            {col.label}
+                            {sortConfig?.key === col.key && (
+                              sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+                            )}
+                            {sortConfig?.key !== col.key && col.key !== 'actions' && !col.key.includes('Warranty') && col.key !== 'selection' && (
+                              <ArrowUpDown className="ml-1 h-3 w-3 opacity-30" />
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {col.key !== 'selection' && col.key !== 'actions' && (
+                        <div
+                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onMouseDown={(e) => handleMouseDown(e, col.key)}
+                        />
                       )}
-                    </div>
-                  </th>
-                ))}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -994,7 +1137,11 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
         title="Add New Asset"
         size="lg"
       >
-        <AssetForm onSubmit={handleAddAsset} onCancel={() => setIsAddModalOpen(false)} />
+        <AssetForm 
+          onSubmit={handleAddAsset} 
+          onCancel={() => setIsAddModalOpen(false)} 
+          departments={departments}
+        />
       </Modal>
 
       <Modal
@@ -1023,6 +1170,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
             initialData={editingAsset}
             onSubmit={handleUpdateAsset}
             onCancel={() => setEditingAsset(null)}
+            departments={departments}
           />
         )}
       </Modal>
@@ -1037,14 +1185,24 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tight">Active Columns</h4>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => recoverSchema(categoryFilter, subcategoryFilter)}
-                className="text-indigo-600 hover:text-indigo-700 h-8 text-xs font-bold"
-              >
-                <Activity className="mr-1.5 h-3 w-3" /> Recover Missing Columns
-              </Button>
+              <div className="flex items-center">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => recoverSchema(categoryFilter, subcategoryFilter)}
+                  className="text-indigo-600 hover:text-indigo-700 h-8 text-xs font-bold"
+                >
+                  <Activity className="mr-1.5 h-3 w-3" /> Recover Missing Columns
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => updateColumnWidths(categoryFilter, subcategoryFilter, null)}
+                  className="text-amber-600 hover:text-amber-700 h-8 text-xs font-bold ml-2"
+                >
+                  <RotateCcw className="mr-1.5 h-3 w-3" /> Reset Widths
+                </Button>
+              </div>
             </div>
             <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2">
               {(() => {
@@ -1056,6 +1214,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                 
                 return currentCols.map(col => {
                   const isCustom = customSchema.find(f => f.key === col.key);
+                  const savedWidth = settings?.columnWidths?.[schemaKey]?.[col.key];
 
                   return (
                     <div key={col.key} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
@@ -1065,6 +1224,20 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                       </div>
                       
                       <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[10px] text-slate-400">Width:</span>
+                          <input 
+                            type="number"
+                            value={savedWidth || 150}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              if (!isNaN(val)) {
+                                updateColumnWidths(categoryFilter, subcategoryFilter, { [col.key]: val });
+                              }
+                            }}
+                            className="w-16 h-7 rounded border border-slate-200 bg-white px-1.5 text-[10px] focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
                         {isCustom && (
                           <button 
                             onClick={() => handleRemoveField(col.key)}
