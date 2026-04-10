@@ -13,6 +13,7 @@ import { MaintenanceRecord, Asset, AssetStatus, GatePass } from '../types';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { toast } from 'sonner';
 import { FileText, CheckCircle2, Clock } from 'lucide-react';
+import { getAssetValue } from '../utils/assetUtils';
 
 interface AssetDetailPageProps {
   assetId: string;
@@ -54,6 +55,15 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
   });
 
   const asset = getAssetById(assetId);
+  const { getEffectiveSchema } = useAssets();
+  const effectiveSchema = asset ? getEffectiveSchema(asset.category, asset.subcategory) : [];
+
+  const getFieldValue = (key: string) => {
+    return getAssetValue(asset, key);
+  };
+
+  const displayName = getFieldValue('name') || 'N/A';
+  const displaySerial = getFieldValue('sysSlNo') || 'N/A';
 
   useEffect(() => {
     if (asset) {
@@ -165,7 +175,7 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
     if (!assetId) return;
     setIsProcessing(true);
     try {
-      await updateAsset(assetId, { status: 'Move to E-Waste' });
+      await updateAsset(assetId, { status: 'E-Waste' });
       setIsRetireConfirmOpen(false);
     } catch (error) {
       console.error('Error retiring asset:', error);
@@ -204,7 +214,7 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
     );
   }
 
-  const { status: warrantyStatus, expiryDate } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory);
+  const { status: warrantyStatus, expiryDate } = getWarrantyStatus(asset);
 
   return (
     <motion.div
@@ -218,14 +228,14 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{asset.name}</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{displayName}</h2>
             <div className="flex items-center space-x-2 text-slate-500 dark:text-slate-400">
-              <span>{asset.sysSlNo}</span>
+              <span>{displaySerial}</span>
               <span>•</span>
               <Badge status={asset.status} />
               <span>•</span>
               {(() => {
-                const { status, expiryDate } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+                const { status, expiryDate } = getWarrantyStatus(asset);
                 return (
                   <div className="flex items-center space-x-2">
                     <Badge status={status} />
@@ -295,13 +305,9 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
                   value={editData.category || ''}
                   onChange={(e) => setEditData({ ...editData, category: e.target.value as any })}
                 >
-                  <option value="Laptop">Laptop</option>
-                  <option value="Server">Server</option>
-                  <option value="Printer">Printer</option>
-                  <option value="Monitor">Monitor</option>
-                  <option value="Networking">Networking</option>
-                  <option value="Mobile">Mobile</option>
-                  <option value="Other">Other</option>
+                  <option value="Hardware">Hardware</option>
+                  <option value="Software">Software</option>
+                  <option value="E-Waste">E-Waste</option>
                 </select>
               </div>
               <div>
@@ -332,7 +338,7 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
                   <option value="Active">Active</option>
                   <option value="In Repair">In Repair</option>
                   <option value="In IT Stock">In IT Stock</option>
-                  <option value="Move to E-Waste">Move to E-Waste</option>
+                  <option value="E-Waste">E-Waste</option>
                   <option value="Expired">Expired</option>
                   <option value="Inactive">Inactive</option>
                 </select>
@@ -396,104 +402,50 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
           </div>
 
           {activeTab === 'details' && (
-            <Card>
-              <h3 className="mb-6 text-lg font-semibold text-slate-900 dark:text-white">General Information</h3>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="flex items-start space-x-3">
-                  <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
-                    <Hash className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">System Serial No</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.sysSlNo}</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
-                    <Box className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Model</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.model}</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
-                    <Calendar className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Invoice Date</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {asset.invoiceDate ? (() => {
-                        try {
-                          const pDate = parseISO(asset.invoiceDate);
-                          return isNaN(pDate.getTime()) ? 'N/A' : format(pDate, 'MMMM d, yyyy');
-                        } catch (e) {
-                          return 'N/A';
-                        }
-                      })() : 'N/A'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
-                    <DollarSign className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Asset Value</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">${(asset.value || 0).toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Department</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.department || 'Unassigned'}</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
-                    <User className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">IP Address</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.ipAddress || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 border-t border-slate-100 pt-8 dark:border-slate-800">
-                <h4 className="mb-4 text-sm font-semibold text-slate-900 dark:text-white">Hardware Specifications</h4>
+            <div className="space-y-6">
+              <Card>
+                <h3 className="mb-6 text-lg font-semibold text-slate-900 dark:text-white">Asset Details</h3>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Processor</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.processor || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">RAM</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.ramMb ? `${asset.ramMb} MB` : 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">HDD</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.hddGb ? `${asset.hddGb} GB` : 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Monitor</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.monitor || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Monitor S/N</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.monitorSn || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">OS</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{asset.os || 'N/A'}</p>
-                  </div>
+                  {effectiveSchema.filter(f => f.key !== 'remarks').map(field => {
+                    const value = getFieldValue(field.key);
+                    let Icon = Hash;
+                    if (field.key.toLowerCase().includes('date')) Icon = Calendar;
+                    if (field.key.toLowerCase().includes('user') || field.key.toLowerCase().includes('assigned')) Icon = User;
+                    if (field.key.toLowerCase().includes('location')) Icon = MapPin;
+                    if (field.key.toLowerCase().includes('dept') || field.key.toLowerCase().includes('vendor')) Icon = Building2;
+                    if (field.key.toLowerCase().includes('value') || field.key.toLowerCase().includes('cost')) Icon = DollarSign;
+                    if (field.key.toLowerCase().includes('warranty')) Icon = ShieldCheck;
+                    if (field.key.toLowerCase().includes('model') || field.key.toLowerCase().includes('system')) Icon = Box;
+
+                    return (
+                      <div key={field.key} className="flex items-start space-x-3">
+                        <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{field.label}</p>
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {field.key.toLowerCase().includes('date') && value ? safeFormat(value, 'MMMM d, yyyy') : 
+                             field.key === 'value' ? `$${(Number(value) || 0).toLocaleString()}` :
+                             field.key === 'ramMb' ? `${value} MB` :
+                             field.key === 'hddGb' ? `${value} GB` :
+                             field.key === 'warrantyDurationMonths' ? `${value} Months` :
+                             value || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            </Card>
+              </Card>
+
+              {asset.remarks && (
+                <Card>
+                  <h4 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Remarks</h4>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 italic">"{asset.remarks}"</p>
+                </Card>
+              )}
+            </div>
           )}
 
           {activeTab === 'maintenance' && (
@@ -775,21 +727,21 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Status</span>
                 {(() => {
-                  const { status } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+                  const { status } = getWarrantyStatus(asset);
                   return <Badge status={status} />;
                 })()}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Duration</span>
                 <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {asset.warrantyDurationMonths ? `${asset.warrantyDurationMonths} Months` : 'N/A'}
+                  {getFieldValue('warrantyDurationMonths') ? `${getFieldValue('warrantyDurationMonths')} Months` : 'N/A'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Expiry Date</span>
                 <span className="text-sm font-semibold text-slate-900 dark:text-white">
                   {(() => {
-                    const { expiryDate } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+                    const { expiryDate } = getWarrantyStatus(asset);
                     return expiryDate ? format(expiryDate, 'dd MMM yyyy') : 'N/A';
                   })()}
                 </span>

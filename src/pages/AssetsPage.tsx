@@ -16,7 +16,7 @@ import { ASSET_SCHEMA, COMMON_FIELDS } from '../constants/assetSchema';
 import { OFFICIAL_DEPARTMENTS } from '../constants/departments';
 import { isAfter, isBefore, parseISO, startOfDay, endOfDay, addDays, isWithinInterval, format } from 'date-fns';
 import { cn } from '../utils/cn';
-import { getColumnColorClass, getRowColorClass } from '../utils/assetUtils';
+import { getColumnColorClass, getRowColorClass, getAssetValue } from '../utils/assetUtils';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -156,10 +156,10 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
   const filteredAndSortedAssets = useMemo(() => {
     let result = assets.filter(a => {
       const searchLower = (search || '').toLowerCase();
-      const matchesSearch = (a.name || '').toLowerCase().includes(searchLower) || 
-                           (a.sysSlNo && a.sysSlNo.toLowerCase().includes(searchLower)) ||
-                           (a.model && a.model.toLowerCase().includes(searchLower)) ||
-                           (a.systemName && a.systemName.toLowerCase().includes(searchLower));
+      const matchesSearch = (getAssetValue(a, 'name') || '').toLowerCase().includes(searchLower) || 
+                           (getAssetValue(a, 'sysSlNo') || '').toLowerCase().includes(searchLower) ||
+                           (getAssetValue(a, 'model') || '').toLowerCase().includes(searchLower) ||
+                           (getAssetValue(a, 'systemName') || '').toLowerCase().includes(searchLower);
       const matchesCategory = categoryFilter === 'All' || 
                              String(a.category || '').toLowerCase() === String(categoryFilter).toLowerCase() || 
                              (categoryFilter === 'E-Waste' && (a.status === 'E-Waste' || a.status === 'Move to E-Waste'));
@@ -184,7 +184,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
       
       let matchesWarranty = true;
       if (warrantyFilter !== 'All') {
-        const { status } = getWarrantyStatus(a.invoiceDate, a.category, a.subcategory, a.warrantyDurationMonths);
+        const { status } = getWarrantyStatus(a);
         if (warrantyFilter !== status) matchesWarranty = false;
       }
 
@@ -229,8 +229,8 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
           return direction === 'asc' ? aVal - bVal : bVal - aVal;
         }
 
-        let aValue: any = (a as any)[key] ?? a.additionalFields?.[key];
-        let bValue: any = (b as any)[key] ?? b.additionalFields?.[key];
+        let aValue: any = getAssetValue(a, key);
+        let bValue: any = getAssetValue(b, key);
 
         // Normalize for comparison
         const aStr = String(aValue ?? '').trim();
@@ -308,7 +308,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
     if (selectedAssetIds.length === 0) return;
     setIsDeleting(true);
     try {
-      await bulkUpdateStatus(selectedAssetIds, 'Move to E-Waste');
+      await bulkUpdateStatus(selectedAssetIds, 'E-Waste');
       setSelectedAssetIds([]);
       toast.success(`Moved ${selectedAssetIds.length} assets to E-Waste`);
     } finally {
@@ -484,6 +484,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
         ...snoCol,
         { key: 'name', label: 'NAME' },
         { key: 'sysSlNo', label: 'SERIAL NO.' },
+        { key: 'model', label: 'MODEL' },
       ];
 
       if (categoryFilter !== 'All') {
@@ -645,7 +646,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
         if (col.key === 'sno') {
           row[col.label] = index + 1;
         } else if (col.key === 'warranty') {
-          const { status } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+          const { status } = getWarrantyStatus(asset);
           const labelMap = {
             'In Warranty': 'In Warranty',
             'Expiring': 'Expiring',
@@ -654,7 +655,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
           };
           row[col.label] = labelMap[status];
         } else {
-          const value = asset[col.key as keyof Asset] ?? asset.additionalFields?.[col.key];
+          const value = getAssetValue(asset, col.key);
           
           // Password masking for viewers
           if (asset.subcategory === 'Password Sheet' && isViewer && (col.key === 'password' || col.key.toLowerCase().includes('password'))) {
@@ -1040,7 +1041,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                         );
                       }
                       if (col.key === 'warranty') {
-                        const { status, expiryDate } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+                        const { status, expiryDate } = getWarrantyStatus(asset);
                         const labelMap = {
                           'In Warranty': 'In Warranty',
                           'Expiring': 'Expiring',
@@ -1114,7 +1115,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
                         );
                       }
 
-                      const value = asset[col.key as keyof Asset] ?? asset.additionalFields?.[col.key];
+                      const value = getAssetValue(asset, col.key);
                       let displayValue = (value === undefined || value === null || String(value).trim() === '' || String(value).toLowerCase() === 'na') 
                         ? 'N/A' 
                         : (typeof value === 'object' ? JSON.stringify(value) : String(value));

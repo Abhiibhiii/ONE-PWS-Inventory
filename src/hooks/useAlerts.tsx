@@ -107,7 +107,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // 1. Check for Warranty Expiring
       const expiringAssets = assets.filter(asset => {
-        const { status } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+        const { status } = getWarrantyStatus(asset);
         return status === 'Expiring';
       });
 

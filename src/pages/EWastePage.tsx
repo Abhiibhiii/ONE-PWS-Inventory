@@ -29,10 +29,12 @@ export const EWastePage: React.FC = () => {
 
   const ewasteAssets = useMemo(() => {
     const searchLower = (search || '').toLowerCase();
-    return assets.filter(a => a.status === 'E-Waste' && (
+    return assets.filter(a => (a.status === 'E-Waste' || a.status === 'Move to E-Waste') && (
       (a.name || '').toLowerCase().includes(searchLower) ||
       (a.sysSlNo || '').toLowerCase().includes(searchLower) ||
-      (a.model || '').toLowerCase().includes(searchLower)
+      (a.model || '').toLowerCase().includes(searchLower) ||
+      (a.vendor || '').toLowerCase().includes(searchLower) ||
+      (a.department || '').toLowerCase().includes(searchLower)
     ));
   }, [assets, search]);
 
@@ -173,13 +175,16 @@ export const EWastePage: React.FC = () => {
                 <th className="px-4 py-3">Serial No</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Model</th>
+                <th className="px-4 py-3">Department</th>
+                <th className="px-4 py-3">Vendor</th>
+                <th className="px-4 py-3">Invoice Date</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {ewasteAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center">
                       <Trash2 className="mb-2 h-12 w-12 opacity-20" />
                       <p>Recycle bin is empty</p>
@@ -204,7 +209,10 @@ export const EWastePage: React.FC = () => {
                     <td className="px-4 py-3">
                       <Badge status={asset.category} />
                     </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{asset.model}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{asset.model || 'N/A'}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{asset.department || 'N/A'}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{asset.vendor || 'N/A'}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{asset.invoiceDate || 'N/A'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end space-x-2">
                         <Button variant="ghost" size="icon" onClick={() => handleRestore(asset.id)} title="Restore Asset">

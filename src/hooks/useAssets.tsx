@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { Asset, Activity, MaintenanceRecord, GlobalSettings, AssetCategory, AssetSubcategory, AssetStatus, AssetHistory, FieldDefinition, GatePass, UserRole } from '../types';
 import { ASSET_SCHEMA, COMMON_FIELDS } from '../constants/assetSchema';
-import { isWithinInterval, addDays, parseISO } from 'date-fns';
+import { isWithinInterval, addDays, addMonths, parseISO, parse, isValid } from 'date-fns';
 import { db, auth } from '../firebase';
 import { toast } from 'sonner';
 import { 
@@ -98,7 +98,7 @@ interface AssetContextType {
   getAssetHistory: (assetId: string) => Promise<AssetHistory[]>;
   getMaintenanceRecords: (assetId: string) => Promise<MaintenanceRecord[]>;
   addMaintenanceRecord: (assetId: string, record: Omit<MaintenanceRecord, 'id' | 'assetId' | 'uid'>) => Promise<void>;
-  getWarrantyStatus: (invoiceDate: string | undefined, category: AssetCategory, subcategory: string, customDuration?: number) => { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null };
+  getWarrantyStatus: (asset: Asset) => { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null };
   getEffectiveSchema: (category: string, subcategory: string) => FieldDefinition[];
   getFinancialYearStats: (year: number) => { added: number; repaired: number; ewaste: number };
   stats: {
@@ -562,10 +562,12 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const batch = writeBatch(db);
         for (const id of chunk) {
           const docRef = doc(db, 'assets', id);
-          batch.update(docRef, { 
+          const updateData: any = { 
             status,
             updatedAt: serverTimestamp()
-          });
+          };
+          
+          batch.update(docRef, updateData);
           
           const currentAsset = assets.find(a => a.id === id);
           await logAssetHistory(
@@ -866,28 +868,103 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return schema;
   }, [settings]);
 
-  const getWarrantyStatus = useCallback((invoiceDate: string | undefined, category: AssetCategory, subcategory: string, customDuration?: number): { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null } => {
-    if (!invoiceDate || !settings) return { status: 'No Data', expiryDate: null };
+  const getWarrantyStatus = useCallback((asset: Asset): { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null } => {
+    const invoiceDate = asset.invoiceDate || asset.additionalFields?.invoiceDate;
+    const purchaseDate = (asset as any).purchaseDate || asset.additionalFields?.purchaseDate;
+    const effectiveDate = invoiceDate || purchaseDate;
+
+    if (!effectiveDate || String(effectiveDate).trim() === '' || String(effectiveDate).toUpperCase() === 'N/A' || String(effectiveDate).toUpperCase() === 'NA') {
+      return { status: 'No Data', expiryDate: null };
+    }
     
     try {
-      const date = parseISO(invoiceDate);
-      if (isNaN(date.getTime())) return { status: 'No Data', expiryDate: null };
+      let date: Date | null = null;
+      
+      // Handle Firestore Timestamp or Date object
+      if (effectiveDate && typeof effectiveDate === 'object') {
+        if ((effectiveDate as any).toDate) {
+          date = (effectiveDate as any).toDate();
+        } else if (effectiveDate instanceof Date) {
+          date = effectiveDate;
+        }
+      }
 
-      let months = customDuration || 0;
-      if (!months) {
-        if (category === 'Hardware') {
-          months = settings.hardwareWarranty?.[subcategory] || 12;
-        } else if (category === 'Software') {
-          months = settings.softwareWarranty?.[subcategory] || 12;
+      if (!date || !isValid(date)) {
+        const strDate = String(effectiveDate).trim();
+
+        // Handle Excel date numbers (days since 1900-01-01)
+        if (/^\d+(\.\d+)?$/.test(strDate)) {
+          const excelDate = parseFloat(strDate);
+          if (excelDate > 25569 && excelDate < 100000) { // Reasonable range for Excel dates
+            date = new Date((excelDate - 25569) * 86400 * 1000);
+          } else if (excelDate > 1000000000) { // Likely a unix timestamp in ms or seconds
+            date = new Date(excelDate > 10000000000 ? excelDate : excelDate * 1000);
+          }
+        }
+
+        if (!date || !isValid(date)) {
+          // Try ISO format
+          const isoDate = parseISO(strDate);
+          if (isValid(isoDate) && strDate.includes('-')) {
+            date = isoDate;
+          } else {
+            // Try common formats
+            const formats = [
+              'dd/MM/yyyy', 'dd-MM-yyyy', 'yyyy/MM/dd', 'MM/dd/yyyy', 'dd.MM.yyyy', 
+              'd/M/yyyy', 'd-M-yyyy', 'yyyy-MM-dd', 'yyyy-M-d', 'd/M/yy', 'dd/MM/yy'
+            ];
+            for (const fmt of formats) {
+              try {
+                const parsedDate = parse(strDate, fmt, new Date());
+                if (isValid(parsedDate)) {
+                  if (parsedDate.getFullYear() > 1900 && parsedDate.getFullYear() < 2100) {
+                    date = parsedDate;
+                    break;
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors for specific formats
+              }
+            }
+          }
+        }
+
+        // Last resort: native Date constructor
+        if (!date || !isValid(date)) {
+          const nativeDate = new Date(strDate);
+          if (isValid(nativeDate) && nativeDate.getFullYear() > 1900 && nativeDate.getFullYear() < 2100) {
+            date = nativeDate;
+          }
+        }
+      }
+
+      if (!date || !isValid(date)) return { status: 'No Data', expiryDate: null };
+      
+      // Normalize duration
+      let months = 0;
+      const customDuration = asset.warrantyDurationMonths !== undefined ? asset.warrantyDurationMonths : asset.additionalFields?.warrantyDurationMonths;
+      
+      if (customDuration !== undefined && customDuration !== null && String(customDuration).toUpperCase() !== "N/A") {
+        months = Number(customDuration);
+      }
+
+      if (!months || isNaN(months)) {
+        if (settings) {
+          if (asset.category === 'Hardware') {
+            months = settings.hardwareWarranty?.[asset.subcategory] || 36;
+          } else if (asset.category === 'Software') {
+            months = settings.softwareWarranty?.[asset.subcategory] || 12;
+          } else {
+            months = 12;
+          }
         } else {
-          months = 12;
+          // Fallback if settings not loaded yet
+          months = asset.category === 'Hardware' ? 36 : 12;
         }
       }
       
-      if (!months) return { status: 'No Data', expiryDate: null };
-      
-      const expiryDate = addDays(date, months * 30);
-      if (isNaN(expiryDate.getTime())) return { status: 'No Data', expiryDate: null };
+      const expiryDate = addMonths(date, months);
+      if (!isValid(expiryDate)) return { status: 'No Data', expiryDate: null };
 
       const now = new Date();
       const thirtyDaysFromNow = addDays(now, 30);
@@ -1080,7 +1157,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       // Warranty stats
-      const { status } = getWarrantyStatus(a.invoiceDate, a.category, a.subcategory, a.warrantyDurationMonths);
+      const { status } = getWarrantyStatus(a);
       switch (status) {
         case 'In Warranty': warranty.active++; break;
         case 'Expiring': warranty.expiring++; break;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetCategory, AssetStatus, AssetSubcategory, FieldDefinition } from '../../types';
 import { cn } from '../../utils/cn';
-import { getRowColorClass } from '../../utils/assetUtils';
+import { getRowColorClass, getAssetValue } from '../../utils/assetUtils';
 import { Input } from '../UI/Input';
 import { Button } from '../UI/Button';
 import { useAssets } from '../../hooks/useAssets';
@@ -112,41 +112,41 @@ export const AssetForm: React.FC<AssetFormProps> = ({ initialData, onSubmit, onC
   const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
   
   const [formData, setFormData] = useState<Omit<Asset, 'id' | 'uid'>>({
-    name: initialData?.name || '',
-    sysSlNo: initialData?.sysSlNo || '',
-    model: initialData?.model || '',
+    name: getAssetValue(initialData, 'name') || '',
+    sysSlNo: getAssetValue(initialData, 'sysSlNo') || '',
+    model: getAssetValue(initialData, 'model') || '',
     category: initialData?.category || 'Hardware',
     subcategory: initialData?.subcategory || 'System',
     status: initialData?.status || 'Active',
     rowColor: initialData?.rowColor || 'White',
-    invoiceDate: initialData?.invoiceDate || (initialData ? '' : new Date().toISOString().split('T')[0]),
-    invoiceNo: initialData?.invoiceNo || '',
-    vendor: initialData?.vendor || '',
-    warrantyDurationMonths: initialData?.warrantyDurationMonths || (
+    invoiceDate: getAssetValue(initialData, 'invoiceDate') || (initialData ? '' : new Date().toISOString().split('T')[0]),
+    invoiceNo: getAssetValue(initialData, 'invoiceNo') || '',
+    vendor: getAssetValue(initialData, 'vendor') || '',
+    warrantyDurationMonths: getAssetValue(initialData, 'warrantyDurationMonths') || (
       initialData ? 0 : (
         initialData?.category === 'Software' 
           ? (settings?.softwareWarranty?.['Mail'] || 12)
           : (settings?.hardwareWarranty?.['System'] || 36)
       )
     ),
-    value: initialData?.value || 0,
-    department: initialData?.department || '',
-    location: initialData?.location || '',
+    value: getAssetValue(initialData, 'value') || 0,
+    department: getAssetValue(initialData, 'department') || '',
+    location: getAssetValue(initialData, 'location') || '',
     assignedTo: initialData?.assignedTo || null,
-    systemName: initialData?.systemName || '',
-    processor: initialData?.processor || '',
-    ramMb: initialData?.ramMb || 0,
-    hddGb: initialData?.hddGb || 0,
-    os: initialData?.os || '',
-    licenseType: initialData?.licenseType || '',
-    productKey: initialData?.productKey || '',
-    monitor: initialData?.monitor || '',
-    monitorSn: initialData?.monitorSn || '',
-    keyboard: initialData?.keyboard || '',
-    mouse: initialData?.mouse || '',
-    usbStatus: initialData?.usbStatus || 'Enabled',
-    ipAddress: initialData?.ipAddress || '',
-    dynamicIp: initialData?.dynamicIp || 'No',
+    systemName: getAssetValue(initialData, 'systemName') || '',
+    processor: getAssetValue(initialData, 'processor') || '',
+    ramMb: getAssetValue(initialData, 'ramMb') || 0,
+    hddGb: getAssetValue(initialData, 'hddGb') || 0,
+    os: getAssetValue(initialData, 'os') || '',
+    licenseType: getAssetValue(initialData, 'licenseType') || '',
+    productKey: getAssetValue(initialData, 'productKey') || '',
+    monitor: getAssetValue(initialData, 'monitor') || '',
+    monitorSn: getAssetValue(initialData, 'monitorSn') || '',
+    keyboard: getAssetValue(initialData, 'keyboard') || '',
+    mouse: getAssetValue(initialData, 'mouse') || '',
+    usbStatus: getAssetValue(initialData, 'usbStatus') || 'Enabled',
+    ipAddress: getAssetValue(initialData, 'ipAddress') || '',
+    dynamicIp: getAssetValue(initialData, 'dynamicIp') || 'No',
     remarks: initialData?.remarks || '',
     maintenanceHistory: initialData?.maintenanceHistory || [],
     additionalFields: initialData?.additionalFields || {},

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
+import { parse, isValid, format as formatDateFns } from 'date-fns';
 import { 
   Upload, 
   FileText, 
@@ -188,12 +189,31 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
         const headerStr = String(header || '');
         const normalizedHeader = headerStr.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
         
-        // Try to find a match in effective schema
-        const match = effectiveSchema.find(f => 
+        // 1. Try to find a match in effective schema
+        let match = effectiveSchema.find(f => 
           (f.key && f.key.toLowerCase() === normalizedHeader) || 
           (f.label && f.label.toLowerCase() === headerStr.toLowerCase().trim()) ||
           (f.headers && f.headers.some(h => typeof h === 'string' && h.toLowerCase() === headerStr.toLowerCase().trim()))
         );
+
+        // 2. Try fuzzy matching with aliases if no direct match
+        if (!match) {
+          const aliases: Record<string, string[]> = {
+            name: ['systemname', 'assetname', 'username', 'employeename', 'accountname', 'servicename', 'projectname', 'softwarename', 'empname', 'fullname', 'displayname'],
+            sysSlNo: ['serialno', 'sn', 'slno', 'serial', 'servicetag', 'accountid', 'id', 'projectid', 'syssn', 'systemserial', 'assetsn', 'assetserial'],
+            model: ['devicemodel', 'modelno', 'laptopmodel', 'systemmodel', 'productmodel'],
+            ipAddress: ['ip', 'networkip', 'ipaddr', 'ipv4'],
+            invoiceNo: ['billno', 'invoiceno', 'receiptno', 'docno'],
+            invoiceDate: ['purchasedate', 'date', 'invoicedate', 'billdate', 'receiptdate']
+          };
+
+          for (const [key, aliasList] of Object.entries(aliases)) {
+            if (aliasList.includes(normalizedHeader)) {
+              match = effectiveSchema.find(f => f.key === key);
+              if (match) break;
+            }
+          }
+        }
 
         if (match) {
           return {
@@ -228,22 +248,56 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
   };
 
   const formatDate = (val: any) => {
-    if (!val) return '';
+    if (val === undefined || val === null || val === '') return '';
+    
+    // If it's already a Date object (XLSX can produce these with cellDates: true)
     if (val instanceof Date) {
       if (!isNaN(val.getTime())) {
-        return val.toISOString().split('T')[0];
+        return formatDateFns(val, 'yyyy-MM-dd');
       }
       return '';
     }
-    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-    
+
+    // Handle Excel serial dates (numbers)
+    if (typeof val === 'number' || (typeof val === 'string' && /^\d+(\.\d+)?$/.test(val))) {
+      const num = parseFloat(String(val));
+      if (num > 25569) { // After 1970-01-01
+        const date = new Date((num - 25569) * 86400 * 1000);
+        if (isValid(date)) {
+          return formatDateFns(date, 'yyyy-MM-dd');
+        }
+      }
+    }
+
+    const strVal = String(val).trim();
+    if (!strVal || strVal.toUpperCase() === 'N/A' || strVal.toUpperCase() === 'NA') return '';
+
+    // Try yyyy-mm-dd directly first
+    if (/^\d{4}-\d{2}-\d{2}$/.test(strVal)) return strVal;
+
+    // Try common formats
+    const formats = ['dd/MM/yyyy', 'dd-MM-yyyy', 'yyyy/MM/dd', 'MM/dd/yyyy', 'dd.MM.yyyy', 'd/M/yyyy', 'd-M-yyyy', 'yyyy-MM-dd', 'yyyy-M-d'];
+    for (const fmt of formats) {
+      try {
+        const parsedDate = parse(strVal, fmt, new Date());
+        if (isValid(parsedDate)) {
+          // Ensure the year is reasonable to avoid false positives
+          if (parsedDate.getFullYear() > 1900 && parsedDate.getFullYear() < 2100) {
+            return formatDateFns(parsedDate, 'yyyy-MM-dd');
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Last resort: native Date constructor
     try {
-      const date = new Date(val);
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
+      const nativeDate = new Date(strVal);
+      if (isValid(nativeDate) && nativeDate.getFullYear() > 1900 && nativeDate.getFullYear() < 2100) {
+        return formatDateFns(nativeDate, 'yyyy-MM-dd');
       }
     } catch (e) {}
-    return String(val);
+
+    return null;
   };
 
   const validateRow = (row: any, rowIndex: number): RowError[] => {
@@ -277,6 +331,26 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
              fieldKey.includes('code') ||
              fieldKey.includes('tag') ||
              fieldKey.includes('id');
+    });
+
+    // Type validation
+    mappings.forEach(m => {
+      if (m.ignored || m.removed) return;
+      const val = row[m.excelHeader];
+      if (val === undefined || val === null || String(val).trim() === '' || String(val).toUpperCase() === 'N/A' || String(val).toUpperCase() === 'NA') return;
+
+      if (m.type === 'number') {
+        const num = typeof val === 'string' ? parseFloat(val.replace(/[^0-9.]/g, '')) : val;
+        if (isNaN(num)) {
+          errors.push({ row: rowIndex + 1, field: m.label, message: 'Invalid number' });
+        }
+      } else if (m.type === 'date') {
+        const d = formatDate(val);
+        // formatDate returns yyyy-MM-dd if successful
+        if (!d || d === '' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+          errors.push({ row: rowIndex + 1, field: m.label, message: 'Invalid date' });
+        }
+      }
     });
 
     if (!hasAnyValue) {
@@ -316,20 +390,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
           const rawVal = val;
           val = typeof val === 'string' ? parseFloat(val.replace(/[^0-9.]/g, '')) : val;
           if (val === undefined || val === null || isNaN(val)) {
-            // For numbers, if it's truly empty, use "N/A" as requested, 
-            // even if it breaks strict number type (it will be handled as string in UI)
-            val = "N/A";
+            // For numbers, if it's truly empty, use null
+            val = null;
           }
         } else if (m.type === 'date') {
           val = formatDate(val);
           if (!val || val === '' || val === 'Invalid Date') {
-            val = "N/A";
+            val = null;
           }
         } else {
           // Text or other
-          val = (val !== undefined && val !== null && String(val).trim() !== '') ? String(val).trim() : "N/A";
-          if (val.toUpperCase() === 'NA' || val.toUpperCase() === 'N/A') {
-            val = "N/A";
+          val = (val !== undefined && val !== null && String(val).trim() !== '') ? String(val).trim() : null;
+          if (val && (val.toUpperCase() === 'NA' || val.toUpperCase() === 'N/A')) {
+            val = null;
           }
           
           if (m.mappedField === 'department' && val !== 'N/A') {
@@ -365,12 +438,29 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
           };
 
           // Move custom fields to additionalFields
+          const standardKeys = new Set([
+            'name', 'sysSlNo', 'model', 'category', 'subcategory', 'status', 
+            'value', 'invoiceDate', 'invoiceNo', 'vendor', 'department', 
+            'location', 'warrantyDurationMonths', 'remarks', 'ipAddress',
+            'processor', 'ramMb', 'hddGb', 'monitor', 'monitorSn', 'os',
+            'licenseType', 'productKey', 'assignedTo', 'peripheralStatus'
+          ]);
+
           mappings.forEach(m => {
-            if (!m.ignored && !m.removed && m.isCustom) {
-              const val = cleanItem[m.mappedField];
-              // Use "N/A" for missing custom fields too
-              asset.additionalFields[m.mappedField] = (val !== undefined && val !== null && val !== '') ? val : "N/A";
-              delete asset[m.mappedField];
+            if (!m.ignored && !m.removed) {
+              let val = cleanItem[m.mappedField];
+              
+              // Convert "N/A" back to null for database storage
+              if (val === "N/A") val = null;
+
+              if (m.isCustom && !standardKeys.has(m.mappedField)) {
+                // Use null for missing custom fields
+                asset.additionalFields[m.mappedField] = (val !== undefined && val !== null && val !== '') ? val : null;
+                delete asset[m.mappedField];
+              } else {
+                // Ensure it's at the top level if it's a standard key
+                asset[m.mappedField] = (val !== undefined && val !== null && val !== '') ? val : null;
+              }
             }
           });
 
@@ -378,16 +468,18 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
           Object.keys(asset).forEach(key => {
             if (key === 'additionalFields' || key === 'maintenanceHistory' || key === 'peripheralStatus' || key === 'assignedTo') return;
             if (asset[key] === undefined || asset[key] === null || String(asset[key]).trim() === '') {
-              asset[key] = "N/A";
+              asset[key] = null;
             }
           });
 
-          // Ensure warranty duration if missing
-          if (!asset.warrantyDurationMonths) {
+          // Ensure warranty duration if missing or invalid
+          if (asset.warrantyDurationMonths === undefined || asset.warrantyDurationMonths === null || asset.warrantyDurationMonths === "N/A") {
             const defaultWarranty = selectedCategory === 'Hardware' 
               ? (settings?.hardwareWarranty?.[selectedSubcategory] || 36)
               : (settings?.softwareWarranty?.[selectedSubcategory] || 12);
-            asset.warrantyDurationMonths = defaultWarranty;
+            asset.warrantyDurationMonths = Number(defaultWarranty);
+          } else {
+            asset.warrantyDurationMonths = Number(asset.warrantyDurationMonths);
           }
 
           return asset;
@@ -537,7 +629,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
                     <td className="px-4 py-3">
                       <select
                         value={m.type}
-                        disabled={!m.isCustom}
                         onChange={(e) => {
                           const newMappings = [...mappings];
                           newMappings[idx].type = e.target.value as any;
@@ -732,7 +823,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
                   {activeMappings.map((m, mIdx) => (
                     <td key={`${m.mappedField}-${mIdx}`} className="px-3 py-2">
                       <div className="flex flex-col">
-                        <span className="text-slate-900 dark:text-white">{row[m.mappedField]}</span>
+                        <span className="text-slate-900 dark:text-white">{row[m.mappedField] ?? 'N/A'}</span>
                         {row._errors.find((e: RowError) => e.field === m.label) && (
                           <span className="text-[10px] text-red-500 font-medium">
                             {row._errors.find((e: RowError) => e.field === m.label).message}

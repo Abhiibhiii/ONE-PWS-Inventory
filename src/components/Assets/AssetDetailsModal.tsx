@@ -8,7 +8,7 @@ import { useAssets } from '../../hooks/useAssets';
 import { useAuth } from '../../hooks/useAuth';
 import { Monitor, Keyboard, Mouse, Cpu, HardDrive, Layers, Shield, User, MapPin, Building, Calendar, Tag, Info, Activity, Clock, ShieldCheck, Plus, History, FileText, Download, Palette, Hash } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { getRowColorClass } from '../../utils/assetUtils';
+import { getRowColorClass, getAssetValue } from '../../utils/assetUtils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { generateGatePassDoc } from '../../lib/gatePassGenerator';
@@ -89,7 +89,9 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
   const handleSave = async () => {
     setIsUpdating(true);
     try {
-      await onUpdateStatus(asset.id, systemStatus, peripheralStatus);
+      // If user selected 'Move to E-Waste', normalize it to 'E-Waste'
+      const finalStatus = systemStatus === 'Move to E-Waste' ? 'E-Waste' : systemStatus;
+      await onUpdateStatus(asset.id, finalStatus, peripheralStatus);
       if (rowColor !== asset.rowColor) {
         await updateAsset(asset.id, { rowColor });
       }
@@ -101,7 +103,7 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
     }
   };
 
-  const statuses: AssetStatus[] = ['Active', 'In Repair', 'Replaced', 'Move to E-Waste', 'In IT Stock'];
+  const statuses: AssetStatus[] = ['Active', 'In Repair', 'Replaced', 'E-Waste', 'In IT Stock'];
   const pStatuses = ['Working', 'Faulty', 'Missing', 'Replaced'];
   const COLOR_OPTIONS: ('White' | 'Red' | 'Violet' | 'Green')[] = ['White', 'Red', 'Violet', 'Green'];
 
@@ -138,20 +140,27 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
     return settings?.gatePassHeaders?.[key] || defaultLabel;
   };
 
+  const getFieldValue = (key: string) => {
+    return getAssetValue(asset, key);
+  };
+
+  const displayName = getFieldValue('name') || 'N/A';
+  const displayModel = getFieldValue('model') || 'N/A';
+
   return (
     <div className={cn("space-y-6 max-h-[80vh] overflow-y-auto pr-2 scrollbar-hide p-4 rounded-xl", getRowColorClass(asset.rowColor))}>
       {/* Header Info */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{asset.name}</h3>
-          <p className="text-sm text-slate-500">{asset.category} • {asset.model}</p>
+          <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{displayName}</h3>
+          <p className="text-sm text-slate-500">{asset.category} • {displayModel}</p>
         </div>
         <div className="flex flex-col items-end space-y-2">
-          <Badge variant={asset.status === 'Active' ? 'success' : asset.status === 'Move to E-Waste' ? 'error' : 'warning'}>
+          <Badge variant={asset.status === 'Active' ? 'success' : (asset.status === 'E-Waste' || asset.status === 'Move to E-Waste') ? 'error' : 'warning'}>
             {asset.status}
           </Badge>
           {(() => {
-            const { status, expiryDate } = getWarrantyStatus(asset.invoiceDate, asset.category, asset.subcategory, asset.warrantyDurationMonths);
+            const { status, expiryDate } = getWarrantyStatus(asset);
             return (
               <div className="flex flex-col items-end space-y-1">
                 <Badge status={status} />
@@ -264,7 +273,7 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
               <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tight">Asset Details</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {effectiveSchema.filter(f => f.key !== 'remarks').map(field => {
-                  const value = (asset as any)[field.key] !== undefined ? (asset as any)[field.key] : asset.additionalFields?.[field.key];
+                  const value = getAssetValue(asset, field.key);
                   const Icon = (FIELD_ICONS as any)[field.key] || Info;
                   
                   return (
