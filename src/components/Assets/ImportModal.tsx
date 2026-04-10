@@ -204,13 +204,28 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
             model: ['devicemodel', 'modelno', 'laptopmodel', 'systemmodel', 'productmodel'],
             ipAddress: ['ip', 'networkip', 'ipaddr', 'ipv4'],
             invoiceNo: ['billno', 'invoiceno', 'receiptno', 'docno'],
-            invoiceDate: ['purchasedate', 'date', 'invoicedate', 'billdate', 'receiptdate']
+            invoiceDate: ['purchasedate', 'date', 'invoicedate', 'billdate', 'receiptdate'],
+            department: ['dept', 'department', 'section', 'unit'],
+            location: ['location', 'site', 'office', 'branch', 'workspace', 'place'],
+            vendor: ['vendor', 'supplier', 'seller', 'dealer'],
+            value: ['value', 'cost', 'price', 'amount', 'rate'],
+            remarks: ['remarks', 'notes', 'comment', 'description']
           };
 
           for (const [key, aliasList] of Object.entries(aliases)) {
             if (aliasList.includes(normalizedHeader)) {
-              match = effectiveSchema.find(f => f.key === key);
-              if (match) break;
+              // Check if it's a standard field or in effective schema
+              const standardField = [...COMMON_FIELDS, ...Object.values(ASSET_SCHEMA).flat()].find(f => f.key === key);
+              if (standardField) {
+                return {
+                  excelHeader: headerStr,
+                  mappedField: standardField.key,
+                  label: standardField.label,
+                  type: standardField.type,
+                  isCustom: false,
+                  ignored: false
+                };
+              }
             }
           }
         }
@@ -485,7 +500,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
           return asset;
         });
 
-      // Prepare new schema if there are custom fields
+      // Strict schema: only use the fields present in the current import
+      // plus any mandatory fields from the static schema that might not be in the import
+      const staticSchema = ASSET_SCHEMA[selectedSubcategory] || [];
+      
+      // Filter out standard fields that are already in ASSET_SCHEMA to avoid duplicates
+      // but keep them if they are in the import to ensure they are shown in table
       const newCustomFields = mappings
         .filter(m => !m.ignored && !m.removed)
         .map(m => ({
@@ -495,29 +515,24 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
           showInTable: true
         }));
 
-      const schemaKey = `${selectedCategory}_${selectedSubcategory}`;
-      const existingCustomSchema = settings?.customSchemas?.[schemaKey] || [];
+      const finalSchema: FieldDefinition[] = [...newCustomFields];
       
-      // Identify fields to explicitly exclude (those in the Excel file that were ignored or removed)
-      const keysToExclude = mappings
-        .filter(m => m.ignored || m.removed)
-        .map(m => m.mappedField);
-      
-      // Union-based schema: keep existing fields that are NOT explicitly excluded in this import, and add new ones
-      const combinedSchema = existingCustomSchema.filter(ef => !keysToExclude.includes(ef.key));
-      
-      newCustomFields.forEach(nf => {
-        const existingIdx = combinedSchema.findIndex(ef => ef.key === nf.key);
-        if (existingIdx >= 0) {
-          // Update existing field (e.g. label or color might have changed)
-          combinedSchema[existingIdx] = nf;
-        } else {
-          // Add new field
-          combinedSchema.push(nf);
+      // Ensure mandatory fields from static schema are present
+      staticSchema.forEach(sf => {
+        if (sf.required && !finalSchema.find(nf => nf.key === sf.key)) {
+          finalSchema.push(sf);
         }
       });
+      
+      // Deduplicate by key just in case
+      const seenKeys = new Set<string>();
+      const deduplicatedSchema = finalSchema.filter(f => {
+        if (seenKeys.has(f.key)) return false;
+        seenKeys.add(f.key);
+        return true;
+      });
 
-      await bulkImport(assetsToImport, selectedCategory, selectedSubcategory, combinedSchema);
+      await bulkImport(assetsToImport, selectedCategory, selectedSubcategory, deduplicatedSchema);
       
       setImportSummary({
         success: assetsToImport.length,

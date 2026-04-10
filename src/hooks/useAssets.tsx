@@ -21,6 +21,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { useAuth } from './useAuth';
+import { getAssetValue } from '../utils/assetUtils';
 
 enum OperationType {
   CREATE = 'create',
@@ -846,32 +847,20 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const getEffectiveSchema = useCallback((category: string, subcategory: string): FieldDefinition[] => {
     const schemaKey = `${category}_${subcategory}`;
+    
+    // If we have a custom schema for this specific subcategory, use it
     if (settings?.customSchemas?.[schemaKey]) {
       return settings.customSchemas[schemaKey];
     }
     
+    // Otherwise, use the static schema for this subcategory
     const staticSchema = ASSET_SCHEMA[subcategory as AssetSubcategory] || [];
-    // Filter out warrantyDurationMonths from common fields as it's handled via hardware/software warranty settings
-    const commonFields = COMMON_FIELDS.filter(f => f.key !== 'warrantyDurationMonths');
     
-    // Combine and deduplicate by key
-    const seen = new Set<string>();
-    const schema: FieldDefinition[] = [];
-    
-    [...staticSchema, ...commonFields].forEach(f => {
-      if (!seen.has(f.key)) {
-        schema.push(f);
-        seen.add(f.key);
-      }
-    });
-    
-    return schema;
+    return staticSchema;
   }, [settings]);
 
   const getWarrantyStatus = useCallback((asset: Asset): { status: 'In Warranty' | 'Expiring' | 'Expired' | 'No Data'; expiryDate: Date | null } => {
-    const invoiceDate = asset.invoiceDate || asset.additionalFields?.invoiceDate;
-    const purchaseDate = (asset as any).purchaseDate || asset.additionalFields?.purchaseDate;
-    const effectiveDate = invoiceDate || purchaseDate;
+    const effectiveDate = getAssetValue(asset, 'invoiceDate');
 
     if (!effectiveDate || String(effectiveDate).trim() === '' || String(effectiveDate).toUpperCase() === 'N/A' || String(effectiveDate).toUpperCase() === 'NA') {
       return { status: 'No Data', expiryDate: null };
@@ -942,7 +931,7 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       // Normalize duration
       let months = 0;
-      const customDuration = asset.warrantyDurationMonths !== undefined ? asset.warrantyDurationMonths : asset.additionalFields?.warrantyDurationMonths;
+      const customDuration = getAssetValue(asset, 'warrantyDurationMonths');
       
       if (customDuration !== undefined && customDuration !== null && String(customDuration).toUpperCase() !== "N/A") {
         months = Number(customDuration);

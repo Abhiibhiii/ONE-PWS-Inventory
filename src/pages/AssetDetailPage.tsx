@@ -406,7 +406,11 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({ assetId, onBac
               <Card>
                 <h3 className="mb-6 text-lg font-semibold text-slate-900 dark:text-white">Asset Details</h3>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {effectiveSchema.filter(f => f.key !== 'remarks').map(field => {
+                  {effectiveSchema.filter(f => {
+                    if (f.key === 'remarks') return false;
+                    const val = getFieldValue(f.key);
+                    return val !== undefined && val !== null && String(val).trim() !== '' && String(val).toUpperCase() !== 'N/A';
+                  }).map(field => {
                     const value = getFieldValue(field.key);
                     let Icon = Hash;
                     if (field.key.toLowerCase().includes('date')) Icon = Calendar;

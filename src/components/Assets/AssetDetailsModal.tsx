@@ -272,7 +272,11 @@ export const AssetDetailsModal: React.FC<AssetDetailsModalProps> = ({ asset, onU
             <div className="space-y-4">
               <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tight">Asset Details</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {effectiveSchema.filter(f => f.key !== 'remarks').map(field => {
+                {effectiveSchema.filter(f => {
+                  if (f.key === 'remarks') return false;
+                  const val = getAssetValue(asset, f.key);
+                  return val !== undefined && val !== null && String(val).trim() !== '' && String(val).toUpperCase() !== 'N/A';
+                }).map(field => {
                   const value = getAssetValue(asset, field.key);
                   const Icon = (FIELD_ICONS as any)[field.key] || Info;
                   

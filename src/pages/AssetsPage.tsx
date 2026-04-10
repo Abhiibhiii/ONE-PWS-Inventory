@@ -471,7 +471,7 @@ export const AssetsPage: React.FC<AssetsPageProps> = ({ onAssetClick, initialAct
       const isCustomized = !!settings?.customSchemas?.[schemaKey];
       
       const dynamicCols = effectiveSchema
-        .filter(f => isCustomized || !isColumnEmpty(f.key))
+        .filter(f => !isColumnEmpty(f.key))
         .map(f => ({ 
           key: f.key, 
           label: f.label.toUpperCase()
