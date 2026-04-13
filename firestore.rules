@@ -151,7 +151,7 @@ service cloud.firestore {
       return isAdmin() ? true : (
              hasRequiredFields(['name', 'sysSlNo', 'status', 'uid', 'category', 'subcategory']) &&
              (data.uid == request.auth.uid || isAdmin()) &&
-             hasOnlyAllowedFields(['id', 'name', 'ipAddress', 'dynamicIp', 'systemName', 'sysSlNo', 'model', 'processor', 'ramMb', 'hddGb', 'monitor', 'monitorSn', 'keyboard', 'mouse', 'os', 'licenseType', 'productKey', 'department', 'location', 'invoiceNo', 'invoiceDate', 'vendor', 'warrantyDurationMonths', 'usbStatus', 'remarks', 'category', 'subcategory', 'status', 'peripheralStatus', 'assignedTo', 'value', 'maintenanceHistory', 'additionalFields', 'uid', 'createdAt', 'updatedAt', 'macAddress', 'port', 'assignedEmail', 'licenseKey', 'expiryDate', 'assignedUser']) &&
+             hasOnlyAllowedFields(['id', 'name', 'ipAddress', 'dynamicIp', 'systemName', 'sysSlNo', 'model', 'processor', 'ramMb', 'hddGb', 'monitor', 'monitorSn', 'keyboard', 'mouse', 'os', 'licenseType', 'productKey', 'department', 'location', 'invoiceNo', 'invoiceDate', 'vendor', 'warrantyDurationMonths', 'usbStatus', 'remarks', 'category', 'subcategory', 'status', 'peripheralStatus', 'assignedTo', 'value', 'maintenanceHistory', 'gatePassHistory', 'additionalFields', 'uid', 'createdAt', 'updatedAt', 'macAddress', 'port', 'assignedEmail', 'licenseKey', 'expiryDate', 'assignedUser']) &&
              isValidString('name', 1, 500) &&
              isValidString('sysSlNo', 1, 500) &&
              isValidStatus(data.status) &&
@@ -160,6 +160,7 @@ service cloud.firestore {
              (!( 'hddGb' in data) || data.hddGb is number) &&
              (!( 'warrantyDurationMonths' in data) || data.warrantyDurationMonths is number) &&
              (!( 'maintenanceHistory' in data) || data.maintenanceHistory is list) &&
+             (!( 'gatePassHistory' in data) || data.gatePassHistory is list) &&
              (!( 'peripheralStatus' in data) || data.peripheralStatus is map) &&
              (!( 'assignedTo' in data) || data.assignedTo is map || data.assignedTo is string || data.assignedTo == null) &&
              (!( 'additionalFields' in data) || data.additionalFields is map)
@@ -172,6 +173,9 @@ service cloud.firestore {
              (!( 'hardwareWarranty' in data) || data.hardwareWarranty is map) &&
              (!( 'softwareWarranty' in data) || data.softwareWarranty is map) &&
              (!( 'notificationsEnabled' in data) || data.notificationsEnabled is bool) &&
+             (!( 'gatePassCounter' in data) || data.gatePassCounter is number) &&
+             (!( 'columnWidths' in data) || data.columnWidths is map) &&
+             (!( 'columnOrders' in data) || data.columnOrders is map) &&
              (!( 'customSchemas' in data) || data.customSchemas is map);
     }
 
@@ -207,8 +211,8 @@ service cloud.firestore {
     }
 
     function isValidGatePass(data) {
-      return hasRequiredFields(['gatePassNo', 'receiverName', 'status', 'assetId', 'uid']) &&
-             hasOnlyAllowedFields(['id', 'gatePassNo', 'createDate', 'plantName', 'transporter', 'receiverCode', 'reason', 'receiverName', 'receiverAddress', 'vehicleNo', 'gstNo', 'lrNo', 'requestedBy', 'deptName', 'remark', 'items', 'status', 'createdAt', 'createdBy', 'assetId', 'assetName', 'uid', 'actualReturnDate', 'vendor', 'dateOut', 'expectedReturn', 'contactPerson']) &&
+      return hasRequiredFields(['gatePassNo', 'status', 'assetId', 'uid']) &&
+             hasOnlyAllowedFields(['id', 'gatePassNo', 'createDate', 'plantName', 'transporter', 'receiverCode', 'reason', 'receiverName', 'receiverAddress', 'vehicleNo', 'gstNo', 'lrNo', 'requestedBy', 'deptName', 'remark', 'remarks', 'items', 'status', 'createdAt', 'createdBy', 'assetId', 'assetName', 'uid', 'actualReturnDate', 'vendor', 'dateOut', 'expectedReturn', 'contactPerson']) &&
              isValidString('gatePassNo', 1, 100) &&
              data.status in ['Pending', 'Returned'] &&
              data.uid == request.auth.uid;

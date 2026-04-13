@@ -702,6 +702,9 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const gatePassNo = `GP-${year}-${nextCounter.toString().padStart(4, '0')}`;
 
       const newGatePass: GatePass = {
+        status: 'Pending',
+        receiverName: (gatePassData as any).vendor || (gatePassData as any).receiverName || 'Unknown',
+        remark: (gatePassData as any).remarks || (gatePassData as any).remark || '',
         ...gatePassData,
         id: Math.random().toString(36).substr(2, 9),
         gatePassNo,
